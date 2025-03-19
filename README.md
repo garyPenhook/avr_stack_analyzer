@@ -106,4 +106,4 @@ This project is licensed under the [MIT License](LICENSE).
 
 ## Version History
 
-Current version: 37 (Rust Rewrite)
+Current version: 1.4
