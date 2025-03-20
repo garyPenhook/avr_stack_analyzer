@@ -9,6 +9,7 @@ use serde::Serialize;
 use crate::elf::ElfInfo;
 use crate::cpu::Cpu;
 use crate::analysis::{MazeAnalysis, TreeAnalysis};
+use std::collections::HashMap;
 
 // Allow dead code in this module as many items will be used in the future
 #[allow(dead_code)]
@@ -48,15 +49,15 @@ pub struct AvrStackError {
 }
 
 impl AvrStackError {
-    pub fn new(code: ErrorCode, file: &str, line: u32, message: &str) -> Self {
+    pub fn new(error_code: ErrorCode, file: &str, line: u32, message: &str) -> Self {
         AvrStackError {
-            code,
-            message: message.to_string(),
+            code: error_code,
             file: file.to_string(),
             line,
+            message: message.to_string(),
         }
     }
-    
+
     pub fn code(&self) -> ErrorCode {
         self.code
     }
@@ -64,8 +65,7 @@ impl AvrStackError {
 
 impl fmt::Display for AvrStackError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "ERROR ({}:{}) [{}]: {} - v{}", 
-               self.file, self.line, self.code as u32, self.message, VERSION)
+        write!(f, "ERROR ({}:{}) [{}]: {} - v{}", self.file, self.line, self.code as u32, self.message, VERSION)
     }
 }
 
@@ -111,7 +111,6 @@ pub fn error_message(code: ErrorCode) -> &'static str {
         ErrorCode::CpuSimulation => "CPU simulation error",
         ErrorCode::StackAnalysis => "Stack analysis error",
         ErrorCode::Parameter => "Invalid parameter",
-        
         ErrorCode::RetiExpected => "RETI instruction expected",
         ErrorCode::RetiUnexpected => "Unexpected RETI instruction",
         ErrorCode::StackChangeLoop => "Loop in stack change",
@@ -124,7 +123,6 @@ pub fn error_message(code: ErrorCode) -> &'static str {
 // ******************************************************************************
 // * PROGRAM OPTIONS
 // ******************************************************************************
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputFormat {
     Default = 5,
@@ -185,7 +183,6 @@ impl Default for ProgramArgs {
 // ******************************************************************************
 // * JSON OUTPUT
 // ******************************************************************************
-
 #[derive(Debug)]
 pub struct JsonWriter {
     file: File,
@@ -204,7 +201,6 @@ impl JsonWriter {
                 line!(),
                 &format!("Failed to create JSON output file: {}", e)
             ))?;
-        
         Ok(JsonWriter {
             file,
             indent: 0,
@@ -213,7 +209,7 @@ impl JsonWriter {
             pretty_print: pretty,
         })
     }
-    
+
     pub fn write_indent(&mut self) -> io::Result<()> {
         if self.pretty_print {
             for _ in 0..self.indent {
@@ -222,21 +218,20 @@ impl JsonWriter {
         }
         Ok(())
     }
-    
+
     pub fn begin_object(&mut self) -> io::Result<()> {
         if !self.first_item {
             writeln!(self.file, ",")?;
         } else {
             self.first_item = false;
         }
-        
         self.write_indent()?;
         writeln!(self.file, "{{")?;
         self.indent += 1;
         self.first_item = true;
         Ok(())
     }
-    
+
     pub fn end_object(&mut self) -> io::Result<()> {
         self.indent -= 1;
         writeln!(self.file)?;
@@ -245,14 +240,13 @@ impl JsonWriter {
         self.first_item = false;
         Ok(())
     }
-    
+
     pub fn begin_array(&mut self) -> io::Result<()> {
         if !self.first_item {
             writeln!(self.file, ",")?;
         } else {
             self.first_item = false;
         }
-        
         self.write_indent()?;
         writeln!(self.file, "[")?;
         self.indent += 1;
@@ -260,7 +254,7 @@ impl JsonWriter {
         self.is_array = true;
         Ok(())
     }
-    
+
     pub fn end_array(&mut self) -> io::Result<()> {
         self.indent -= 1;
         writeln!(self.file)?;
@@ -270,64 +264,63 @@ impl JsonWriter {
         self.is_array = false;
         Ok(())
     }
-    
+
     pub fn write_property_name(&mut self, name: &str) -> io::Result<()> {
         if !self.first_item {
             writeln!(self.file, ",")?;
         } else {
             self.first_item = false;
         }
-        
         self.write_indent()?;
         write!(self.file, "\"{}\": ", name)?;
         Ok(())
     }
-    
+
     pub fn write_string(&mut self, value: &str) -> io::Result<()> {
         write!(self.file, "\"{}\"", value)?;
         Ok(())
     }
-    
+
     pub fn write_int(&mut self, value: i32) -> io::Result<()> {
         write!(self.file, "{}", value)?;
         Ok(())
     }
-    
+
     pub fn write_uint(&mut self, value: u32) -> io::Result<()> {
         write!(self.file, "{}", value)?;
         Ok(())
     }
-    
+
     pub fn write_bool(&mut self, value: bool) -> io::Result<()> {
         write!(self.file, "{}", if value { "true" } else { "false" })?;
         Ok(())
     }
-    
+
     pub fn write_hex(&mut self, value: u32) -> io::Result<()> {
         write!(self.file, "\"0x{:x}\"", value)?;
         Ok(())
     }
-    
+
     pub fn write_property_string(&mut self, name: &str, value: &str) -> io::Result<()> {
         self.write_property_name(name)?;
         self.write_string(value)
     }
-    
+
     pub fn write_property_int(&mut self, name: &str, value: i32) -> io::Result<()> {
         self.write_property_name(name)?;
         self.write_int(value)
     }
-    
+
     pub fn write_property_uint(&mut self, name: &str, value: u32) -> io::Result<()> {
         self.write_property_name(name)?;
         self.write_uint(value)
     }
-    
+
     pub fn write_property_bool(&mut self, name: &str, value: bool) -> io::Result<()> {
         self.write_property_name(name)?;
         self.write_bool(value)
     }
-    
+
     pub fn write_property_hex(&mut self, name: &str, value: u32) -> io::Result<()> {
         self.write_property_name(name)?;
         self.write_hex(value)
@@ -353,7 +346,7 @@ impl ArchInfo {
             ram_size: 2 * 1024,  // 2KB RAM (typical for many AVRs)
         }
     }
-    
+
     pub fn parse_standard_patterns(&mut self) -> Result<()> {
         // Implementation for pattern recognition
         // This would identify compiler-specific code patterns
@@ -364,8 +357,8 @@ impl ArchInfo {
         // Implementation for determining the number of interrupt vectors
         Ok(())
     }
-    
-    pub fn detect_memory_sizes(&mut self, elf: &ElfInfo) -> Result<()> {
+
+    pub fn detect_memory_sizes(&mut self, _elf: &ElfInfo) -> Result<()> {
         // Implementation for detecting memory sizes
         Ok(())
     }
@@ -404,7 +397,7 @@ impl AvrStack {
             results: Vec::new(),
         }
     }
-    
+
     pub fn parse_args(&mut self) -> Result<()> {
         // Use clap to define and parse command-line arguments
         let matches = Command::new("AVR Stack")
@@ -464,7 +457,7 @@ impl AvrStack {
                 .help("Ignore function with given name")
                 .action(ArgAction::Append))
             .get_matches();
-        
+
         // Set the program arguments based on command-line options
         if let Some(filename) = matches.get_one::<String>("INPUT") {
             self.args.filename = Some(filename.clone());
@@ -476,7 +469,7 @@ impl AvrStack {
                 "No input file specified"
             ));
         }
-        
+
         if let Some(format) = matches.get_one::<String>("format") {
             match format.as_str() {
                 "v4" => self.args.format = OutputFormat::V4,
@@ -496,48 +489,48 @@ impl AvrStack {
                 }
             }
         }
-        
+
         self.args.total_only = matches.get_flag("total-only");
         self.args.allow_calls_from_isr = matches.get_flag("allow-calls-from-isr");
         self.args.wrap_0 = matches.get_flag("wrap0");
         self.args.include_bad_interrupt = matches.get_flag("include-bad-interrupt");
         self.args.ignore_icall_all = matches.get_flag("ignore-icall");
         self.args.memory_report = matches.get_flag("memory-report");
-        
+
         if matches.get_flag("json") {
             self.args.json_output = true;
             self.args.format = OutputFormat::Json;
         }
-        
+
         // Default to pretty JSON, set to compact if flag is present
         self.args.json_pretty = !matches.get_flag("json-compact");
-        
+
         // Parse max recursion
         if let Some(max_rec) = matches.get_one::<String>("max-recursion") {
             if let Ok(depth) = max_rec.parse::<u32>() {
                 self.args.max_recursion = depth;
             }
         }
-        
+
         // Parse ignored functions
         if let Some(ignored) = matches.get_many::<String>("ignore-function") {
             for func in ignored {
                 self.args.ignore_functions.push(func.clone());
             }
         }
-        
+
         // Parse icall arguments (for specific icall handling)
         // This would involve parsing arguments like -ignoreICall=func+0x## and -iCall=func+0x##:dests
-        
+
         Ok(())
     }
-    
+
     pub fn run(&mut self) -> Result<()> {
         println!("AVR Stack Analyzer v{} starting...", VERSION);
-        
+
         // Parse command-line arguments
         self.parse_args()?;
-        
+
         // Read and parse the ELF file
         if let Some(filename) = &self.args.filename {
             println!("Reading ELF file: {}", filename);
@@ -550,41 +543,41 @@ impl AvrStack {
                 "No input file specified"
             ));
         }
-        
+
         // Initialize the CPU with the program data
         self.cpu.init(
             self.elf.get_text().to_vec(),
             self.elf.get_text_size(),
-            self.elf.get_ram_start()
+            self.elf.get_ram_start(),
         )?;
-        
+
         // Set CPU options from program arguments
         self.cpu.wrap_0 = self.args.wrap_0;
         self.cpu.allow_calls_from_isr = self.args.allow_calls_from_isr;
         self.cpu.elf_info = Some(self.elf.clone());
-        
+
         // Initialize architecture information
         self.arch.parse_standard_patterns()?;
         self.arch.guess_num_interrupt_vectors()?;
         self.arch.detect_memory_sizes(&self.elf)?;
-        
+
         // Register any ignored functions in the maze analysis
         for func in &self.args.ignore_functions {
             println!("Ignoring function: {}", func);
-            self.maze.add_ignored_function(func);
+            self.maze.add_ignored_function(func.to_string());
         }
-        
+
         // Perform control flow analysis
         println!("Performing control flow analysis...");
         self.maze.analyze(&mut self.cpu, &self.arch)?;
-        
+
         // Build the call tree
         println!("Building call tree...");
         self.tree.build(self.arch.num_isrs, &self.arch.isr, &self.cpu)?;
-        
+
         // Generate the stack usage report
         self.tree.dump_stack_tree(&self.args)?;
-        
+
         // Check for calls from interrupts
         if self.maze.calls_from_interrupt && !self.args.allow_calls_from_isr {
             return Err(AvrStackError::new(
@@ -594,38 +587,34 @@ impl AvrStack {
                 "Calls from interrupts detected"
             ));
         }
-        
+
         // Get the final results
         self.results = self.tree.get_results();
-        
+
         // Output results in the requested format
         if self.args.json_output {
             self.output_json()?;
         }
-        
+
         // Generate call graph if requested
         if self.args.call_graph {
             self.generate_call_graph()?;
         }
-        
+
         println!("AVR Stack analysis completed successfully");
-        
         Ok(())
     }
-    
+
     pub fn output_json(&self) -> Result<()> {
         if let Some(filename) = &self.args.filename {
             let json_filename = format!("{}.json", filename);
-            let mut writer = JsonWriter::new(&json_filename, self.args.json_pretty)?;
-            
+            JsonWriter::new(&json_filename, self.args.json_pretty)?;
             // Write JSON output using writer
             // This would include all the analysis results
-            
+
             // Also print a pretty-formatted version to the terminal
             self.print_terminal_friendly_json()?;
-            
             println!("JSON output written to {}", json_filename);
-            
             Ok(())
         } else {
             Err(AvrStackError::new(
@@ -636,32 +625,136 @@ impl AvrStack {
             ))
         }
     }
-    
+
     fn print_terminal_friendly_json(&self) -> Result<()> {
         // Implementation for printing a terminal-friendly JSON output
         Ok(())
     }
-    
+
     pub fn generate_call_graph(&self) -> Result<()> {
         if let Some(filename) = &self.args.filename {
             let dot_filename = format!("{}.dot", filename);
-            let mut file = File::create(&dot_filename)?;
-            
-            writeln!(file, "digraph call_graph {{")?;
-            
-            // Generate the call graph in DOT format
-            for (caller, callees) in &self.cpu.call_graph {
-                for callee in callees {
-                    writeln!(file, "  \"func_0x{:x}\" -> \"func_0x{:x}\";", caller * 2, callee * 2)?;
+            let mut file = File::create(&dot_filename)
+                .map_err(|e| AvrStackError::new(
+                    ErrorCode::FileIo,
+                    file!(),
+                    line!(),
+                    &format!("Failed to create DOT file: {}", e)
+                ))?;
+
+            // Write DOT file header with improved styling
+            writeln!(file, "digraph CallGraph {{")?;
+            writeln!(file, "  node [shape=box, style=filled, fontname=\"Helvetica\"];")?;
+            writeln!(file, "  edge [fontname=\"Helvetica\"];")?;
+            writeln!(file, "  ranksep=1.5;")?;
+
+            // Define node colors based on stack usage
+            let max_stack = self.results.iter()
+                .map(|r| r.stack_usage)
+                .max()
+                .unwrap_or(0);
+
+            // Map of function addresses to better names (where available)
+            let mut function_names = HashMap::new();
+
+            // Build function name mapping
+            for result in &self.results {
+                // Extract address from name if it's a func_0xNNNN pattern
+                if result.function_name.starts_with("func_0x") {
+                    if let Ok(addr) = u32::from_str_radix(&result.function_name[6..], 16) {
+                        function_names.insert(addr/2, result.function_name.clone());
+                    }
+                } else {
+                    // For named functions, try to find the address
+                    for &addr in self.cpu.stack_map.keys() {
+                        if let Some(name) = self.cpu.get_symbol_name(addr) {
+                            if name == result.function_name {
+                                function_names.insert(addr, result.function_name.clone());
+                                break;
+                            }
+                        }
+                    }
                 }
             }
-            
+
+            // Add nodes (functions) with better labeling and information
+            for result in &self.results {
+                let addr = result.address / 2; // Convert to word address
+                let intensity = if max_stack > 0 {
+                    result.stack_usage as f32 / max_stack as f32
+                } else {
+                    0.0
+                };
+                // Generate color from green (low stack) to red (high stack)
+                let r = (intensity * 255.0) as u8;
+                let g = ((1.0 - intensity) * 255.0) as u8;
+                let b = 100u8;
+                let color = format!("\"#{:02x}{:02x}{:02x}\"", r, g, b);
+
+                // Try to determine function size for labeling
+                let function_size = if let Some(ref elf) = self.cpu.elf_info {
+                    elf.symbols.iter()
+                       .find(|s| s.address == addr)
+                       .map(|s| s.size)
+                       .unwrap_or(0)
+                } else {
+                    0
+                };
+
+                // Write node definition with more information
+                writeln!(file, "  \"{}\" [label=\"{}\nStack: {} bytes\nAddr: 0x{:x}{}\", fillcolor={}, tooltip=\"Address: 0x{:x}\"];",
+                         result.function_name, 
+                         result.function_name,
+                         result.stack_usage,
+                         result.address,
+                         if function_size > 0 { format!("\nSize: {} bytes", function_size) } else { String::new() },
+                         color,
+                         result.address)?;
+            }
+
+            // Add edges (calls between functions) with better labeling
+            for (caller, callees) in &self.cpu.call_graph {
+                let caller_name = if let Some(name) = self.cpu.get_symbol_name(*caller) {
+                    name
+                } else if let Some(name) = function_names.get(caller) {
+                    name.clone()
+                } else {
+                    format!("func_0x{:x}", caller * 2)
+                };
+                for callee in callees {
+                    let callee_name = if let Some(name) = self.cpu.get_symbol_name(*callee) {
+                        name
+                    } else if let Some(name) = function_names.get(callee) {
+                        name.clone()
+                    } else {
+                        format!("func_0x{:x}", callee * 2)
+                    };
+                    writeln!(file, "  \"{}\" -> \"{}\";", caller_name, callee_name)?;
+                }
+            }
+
+            // Add a legend
+            writeln!(file, "  subgraph cluster_legend {{")?;
+            writeln!(file, "    label=\"Legend\";")?;
+            writeln!(file, "    style=filled;")?;
+            writeln!(file, "    color=lightgrey;")?;
+            writeln!(file, "    \"Legend\" [shape=none, label=<")?;
+            writeln!(file, "      <table border=\"0\" cellspacing=\"0\" cellpadding=\"2\">")?;
+            writeln!(file, "        <tr><td>Node Color</td><td>Stack Usage</td></tr>")?;
+            writeln!(file, "        <tr><td bgcolor=\"#00ff64\"></td><td>Low</td></tr>")?;
+            writeln!(file, "        <tr><td bgcolor=\"#ffff64\"></td><td>Medium</td></tr>")?;
+            writeln!(file, "        <tr><td bgcolor=\"#ff0064\"></td><td>High</td></tr>")?;
+            writeln!(file, "      </table>")?;
+            writeln!(file, "    >];")?;
+            writeln!(file, "  }}")?;
+
             // Close the DOT file
             writeln!(file, "}}")?;
-            
-            println!("Call graph written to {}", dot_filename);
+
+            println!("Enhanced call graph written to {}", dot_filename);
             println!("To generate a visual graph, use: dot -Tpng {} -o {}.png", dot_filename, filename);
-            
+            println!("For PDF format: dot -Tpdf {} -o {}.pdf", dot_filename, filename);
+
             Ok(())
         } else {
             Err(AvrStackError::new(

@@ -32,6 +32,50 @@ impl PatternMatcher {
             vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xF0],
         ));
         
+        // Add more prologue patterns:
+
+        // GCC -Os (size optimized) - Simple push sequence for register saving
+        patterns.push((
+            "gcc_os_push_sequence".to_string(),
+            vec![0xCF, 0x93, 0xDF, 0x93],  // push r28/r29 (in different order)
+            vec![0xFF, 0xFF, 0xFF, 0xFF],
+        ));
+        
+        // GCC inline function pattern (typically starts with pushing registers)
+        patterns.push((
+            "gcc_inline_function".to_string(),
+            vec![0x0F, 0x93],  // push r16
+            vec![0xFF, 0xFF],
+        ));
+        
+        // IAR compiler common pattern
+        patterns.push((
+            "iar_prologue".to_string(),
+            vec![0xEF, 0x93, 0xFF, 0x93],  // push r30/r31 (common in IAR)
+            vec![0xFF, 0xFF, 0xFF, 0xFF],
+        ));
+        
+        // Small function without frame setup (direct return)
+        patterns.push((
+            "small_function".to_string(),
+            vec![0x80, 0xE0, 0x90, 0xE0],  // ldi r24,0; ldi r25,0 (common function start)
+            vec![0xFF, 0xF0, 0xFF, 0xF0],
+        ));
+        
+        // GCC -O3 optimized function (often starts with register setup)
+        patterns.push((
+            "gcc_o3_function".to_string(),
+            vec![0x8F, 0xEF, 0x90, 0xE0],  // ldi r24,0xFF; ldi r25,0 
+            vec![0xFF, 0xFF, 0xFF, 0xFF],
+        ));
+        
+        // Multi-register push sequence (common in larger functions)
+        patterns.push((
+            "multi_register_save".to_string(),
+            vec![0x0F, 0x93, 0x1F, 0x93, 0x2F, 0x93],  // push r16/r17/r18
+            vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF],
+        ));
+        
         Self { patterns }
     }
     
@@ -53,6 +97,97 @@ impl PatternMatcher {
         }
         
         None
+    }
+
+    // Check if a sequence looks like a function beginning based on heuristics
+    pub fn is_likely_function_start(&self, data: &[u8], offset: usize) -> bool {
+        if offset + 8 >= data.len() {
+            return false;
+        }
+        
+        // Heuristic 1: Check for register saving operations at the beginning
+        let has_push_operations = self.has_push_operations(data, offset);
+        
+        // Heuristic 2: Check for function parameter loading
+        let has_param_loading = self.has_parameter_loading(data, offset);
+        
+        // Heuristic 3: Check for stack adjustment
+        let has_stack_adjustment = self.has_stack_adjustment(data, offset);
+        
+        // Return true if at least two heuristics match
+        (has_push_operations as u8 + has_param_loading as u8 + has_stack_adjustment as u8) >= 2
+    }
+    
+    // Check if the sequence has push operations (register saving)
+    fn has_push_operations(&self, data: &[u8], offset: usize) -> bool {
+        if offset + 2 >= data.len() {
+            return false;
+        }
+        
+        // Look for push instructions (0xXF, 0x93) where X is the register
+        let mut count = 0;
+        for i in (offset..offset+8).step_by(2) {
+            if i + 1 < data.len() && (data[i] & 0x0F) == 0x0F && data[i+1] == 0x93 {
+                count += 1;
+            }
+        }
+        
+        count >= 1
+    }
+    
+    // Check if the sequence has parameter loading (common at function start)
+    fn has_parameter_loading(&self, data: &[u8], offset: usize) -> bool {
+        if offset + 4 >= data.len() {
+            return false;
+        }
+        
+        // Look for typical parameter loading patterns:
+        // ldi instructions (0xEX, 0xE0) - load immediate to registers r16-r31
+        // mov instructions (0xXX, 0x2F) - move between registers
+        for i in (offset..offset+6).step_by(2) {
+            if i + 1 < data.len() {
+                // Check for ldi rX, immediate
+                if (data[i] & 0xF0) == 0xE0 && (data[i+1] & 0xF0) == 0xE0 {
+                    return true;
+                }
+                
+                // Check for mov rX, rY
+                if (data[i+1] & 0x2F) == 0x2F {
+                    return true;
+                }
+            }
+        }
+        
+        false
+    }
+    
+    // Check if the sequence has stack pointer adjustment
+    fn has_stack_adjustment(&self, data: &[u8], offset: usize) -> bool {
+        if offset + 8 >= data.len() {
+            return false;
+        }
+        
+        // Look for stack pointer adjustment:
+        // in r28, SPL (0xCD, 0xB7)
+        // in r29, SPH (0xDE, 0xB7)
+        // sbiw r28, XX (0x97, 0x50+XX)
+        
+        for i in (offset..offset+6).step_by(2) {
+            if i + 3 < data.len() {
+                // Check for "in r28, SPL; in r29, SPH" sequence
+                if data[i] == 0xCD && data[i+1] == 0xB7 && 
+                   data[i+2] == 0xDE && data[i+3] == 0xB7 {
+                    return true;
+                }
+                
+                // Check for sbiw r28, XX (subtract immediate from word)
+                if data[i] == 0x97 && (data[i+1] & 0xF0) == 0x50 {
+                    return true;
+                }
+            }
+        }
+        
+        false
     }
 }
 
@@ -170,7 +305,6 @@ impl MazeAnalysis {
     fn identify_function_entry_points(&mut self, cpu: &Cpu) -> Result<Vec<CpuAddr>> {
         let mut entry_points = Vec::new();
         
-        
         // First, get entry points from ELF symbols if available
         if let Some(ref elf_info) = cpu.elf_info {
             for symbol in &elf_info.symbols {
@@ -184,44 +318,213 @@ impl MazeAnalysis {
         let mut offset = 0;
         
         while offset + 2 < cpu.prog.len() {
+            // Try pattern matching first
             if let Some((name, len, _)) = matcher.find_prologue(&cpu.prog, offset) {
                 let addr = (offset as u32) / 2; // Convert byte offset to instruction address
                 
                 // Check if this entry point is already in our list from symbols
                 if !entry_points.contains(&addr) {
                     entry_points.push(addr);
-                    
                     println!("Found function prologue pattern '{}' at address 0x{:x}", name, addr * 2);
                 }
                 
                 offset += len;
+            } else if matcher.is_likely_function_start(&cpu.prog, offset) {
+                // If no exact pattern match, try heuristic detection
+                let addr = (offset as u32) / 2;
+                
+                // Check if this entry point is already in our list
+                if !entry_points.contains(&addr) {
+                    // Validate further that this isn't the middle of another function
+                    if self.validate_as_function_entry(cpu, addr) {
+                        entry_points.push(addr);
+                        println!("Found likely function entry point at address 0x{:x} (heuristic match)", addr * 2);
+                    }
+                }
+                
+                offset += 2;
             } else {
                 offset += 2;
             }
         }
         
+        // Final step: Use control flow analysis to find additional entry points
+        self.find_entry_points_by_control_flow(cpu, &mut entry_points)?;
+        
         Ok(entry_points)
     }
     
-    fn analyze_function(&mut self, cpu: &mut Cpu, addr: CpuAddr) -> Result<u32> {
-        // Check if we've already visited this address
-        if self.visited_addresses.contains(&addr) {
-            return Ok(cpu.stack_map.get(&addr).copied().unwrap_or(0));
+    // Validate if an address is truly a function entry point by checking surrounding context
+    fn validate_as_function_entry(&self, cpu: &Cpu, addr: CpuAddr) -> bool {
+        // Convert to byte offset
+        let offset = (addr as usize) * 2;
+        
+        if offset < 4 || offset + 8 >= cpu.prog.len() {
+            return false;
         }
         
-        self.visited_addresses.insert(addr);
+        // Check if the previous instruction is a 'ret' or 'reti'
+        // This would indicate the end of the previous function
+        let prev_instr = ((cpu.prog[offset-2] as u16) << 8) | (cpu.prog[offset-1] as u16);
+        if prev_instr == 0x9508 || prev_instr == 0x9518 { // ret or reti
+            return true;
+        }
         
-        // Use the CPU to analyze this function's stack usage
-        let stack_usage = cpu.analyze_function_stack(addr)?;
+        // Check if this address is the target of any 'call' instructions
+        // This is a strong indicator of a function entry point
+        for i in (0..cpu.prog.len()).step_by(2) {
+            if i + 3 < cpu.prog.len() {
+                // Look for call instruction (0x940E) and extract address
+                let instr = ((cpu.prog[i] as u16) << 8) | (cpu.prog[i+1] as u16);
+                if (instr & 0xFE0E) == 0x940E {
+                    // This is a call - extract target address
+                    let k = ((cpu.prog[i+2] as u32) << 8) | (cpu.prog[i+3] as u32);
+                    let target = k / 2; // Convert byte address to word address
+                    
+                    if target == addr as u32 {
+                        return true;
+                    }
+                }
+            }
+        }
         
-        // Store the stack usage
-        self.stack_changes.insert(addr, stack_usage as i32);
-        
-        Ok(stack_usage)
+        // If we couldn't strongly validate, return false to be conservative
+        false
     }
     
-    pub fn add_ignored_function(&mut self, name: &str) {
-        self.ignored_functions.insert(name.to_string());
+    // Find additional entry points by analyzing control flow
+    fn find_entry_points_by_control_flow(&self, cpu: &Cpu, entry_points: &mut Vec<CpuAddr>) -> Result<()> {
+        // Build a set of all known entry points for quick lookup
+        let mut known_entries: HashSet<CpuAddr> = entry_points.iter().cloned().collect();
+        
+        // First pass: look for direct call instructions
+        for i in (0..cpu.prog.len()-3).step_by(2) {
+            // Check for call instructions (0x940E or 0x940F for CALL)
+            let instr = ((cpu.prog[i] as u16) << 8) | (cpu.prog[i+1] as u16);
+            
+            if (instr & 0xFE0E) == 0x940E {
+                // This is a call instruction - extract target address
+                let k = ((cpu.prog[i+2] as u32) << 8) | (cpu.prog[i+3] as u32);
+                let target_addr = k / 2; // Convert byte address to word address
+                
+                if !known_entries.contains(&(target_addr as CpuAddr)) && 
+                   (target_addr as usize) * 2 < cpu.prog.len() {
+                    entry_points.push(target_addr as CpuAddr);
+                    known_entries.insert(target_addr as CpuAddr);
+                    println!("Found function entry point at address 0x{:x} (call target)", target_addr * 2);
+                }
+            }
+            
+            // Check for rcall instructions (0xD000-0xDFFF)
+            if (instr & 0xF000) == 0xD000 {
+                // RCALL with 12-bit signed offset
+                let offset = instr & 0x0FFF;
+                let _offset = if (offset & 0x0800) != 0 {
+                    ((offset | 0xF000) as i16) as i32 // Sign extend
+                } else {
+                    (offset as i16) as i32
+                };
+                
+                // Calculate target (PC relative)
+                let target_addr = ((i/2) as i32 + 1 + _offset) as u32;
+                
+                if target_addr > 0 && !known_entries.contains(&target_addr) && 
+                   (target_addr as usize) * 2 < cpu.prog.len() {
+                    entry_points.push(target_addr);
+                    known_entries.insert(target_addr);
+                    println!("Found function entry point at address 0x{:x} (rcall target)", target_addr * 2);
+                }
+            }
+        }
+        
+        // Second pass: look for jump tables and indirect call patterns
+        for i in (0..cpu.prog.len()-7).step_by(2) {
+            // Look for sequences that load Z register for indirect calls
+            // Typically: LDI ZL, low(table); LDI ZH, high(table); IJMP/ICALL
+            
+            // Check for LDI r30 (ZL) followed by LDI r31 (ZH)
+            let instr1 = ((cpu.prog[i] as u16) << 8) | (cpu.prog[i+1] as u16);
+            let instr2 = ((cpu.prog[i+2] as u16) << 8) | (cpu.prog[i+3] as u16);
+            
+            if (instr1 & 0xF0F0) == 0xE0E0 && (instr2 & 0xF0F0) == 0xE0F0 {
+                // Extract the immediate values for ZL and ZH
+                let zl = ((instr1 & 0x0F00) >> 4) | (instr1 & 0x000F);
+                let zh = ((instr2 & 0x0F00) >> 4) | (instr2 & 0x000F);
+                let addr = ((zh as u32) << 8) | (zl as u32);
+                
+                // Verify this is within program memory
+                if addr > 0 && addr * 2 < cpu.prog_size && !known_entries.contains(&addr) {
+                    // This looks like a table address - check if it points to valid code
+                    if self.validate_as_function_entry(cpu, addr) {
+                        entry_points.push(addr);
+                        known_entries.insert(addr);
+                        println!("Found potential function entry at address 0x{:x} (jump table)", addr * 2);
+                    }
+                }
+            }
+        }
+        
+        // Third pass: analyze branch instructions to identify function boundaries
+        self.identify_function_boundaries(cpu, entry_points, &known_entries)?;
+        
+        Ok(())
+    }
+    
+    fn identify_function_boundaries(&self, cpu: &Cpu, entry_points: &mut Vec<CpuAddr>, 
+                                   known_entries: &HashSet<CpuAddr>) -> Result<()> {
+        // Look for common function boundary patterns:
+        // 1. RET/RETI followed by potential function start
+        // 2. Unconditional jumps followed by new code blocks
+        
+        for i in (0..cpu.prog.len()-4).step_by(2) {
+            let instr = ((cpu.prog[i] as u16) << 8) | (cpu.prog[i+1] as u16);
+            
+            // Check for RET (0x9508) or RETI (0x9518)
+            if instr == 0x9508 || instr == 0x9518 {
+                let next_addr = (i/2) + 1;
+                
+                // The instruction after a return could be a function start
+                if !known_entries.contains(&(next_addr as CpuAddr)) &&
+                   self.validate_as_function_entry(cpu, next_addr as CpuAddr) {
+                    entry_points.push(next_addr as CpuAddr);
+                    println!("Found potential function entry at address 0x{:x} (after return)", next_addr * 2);
+                }
+            }
+            
+            // Check for unconditional jumps followed by new code blocks
+            if (instr & 0xF000) == 0xC000 { // RJMP
+                // Calculate absolute destination address
+                let offset = instr & 0x0FFF;
+                let offset = if (offset & 0x0800) != 0 {
+                    ((offset | 0xF000) as i16) as i32 // Sign extend
+                } else {
+                    (offset as i16) as i32
+                };
+                
+                let next_instr_addr = (i/2) + 1;
+                
+                // The instruction after an unconditional jump could be a function start
+                if !known_entries.contains(&(next_instr_addr as CpuAddr)) &&
+                   self.validate_as_function_entry(cpu, next_instr_addr as CpuAddr) {
+                    entry_points.push(next_instr_addr as CpuAddr);
+                    println!("Found potential function entry at address 0x{:x} (after jump)", next_instr_addr * 2);
+                }
+            }
+        }
+        
+        Ok(())
+    }
+
+    // Add this method that's being called but missing
+    pub fn add_ignored_function(&mut self, func: String) {
+        self.ignored_functions.insert(func);
+    }
+
+    // Fix the missing analyze_function method
+    fn analyze_function(&mut self, cpu: &mut Cpu, addr: CpuAddr) -> Result<()> {
+        // Call into the appropriate analysis function
+        cpu.analyze_function_stack(addr)?;
+        Ok(())
     }
 }
 

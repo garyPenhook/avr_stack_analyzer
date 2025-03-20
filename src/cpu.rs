@@ -720,6 +720,17 @@ impl Cpu {
                 if (instr_flags & CPU_F_CALL) != 0 {
                     if let Some(target) = self.get_call_target(path.addr, opcode, instr) {
                         // For a call, we need to account for the called function's stack usage
+                        
+                        // ENHANCEMENT: Always add to call graph, even if we've already visited 
+                        // the target (this captures all call paths)
+                        if let Some(targets) = self.call_graph.get_mut(&path.addr) {
+                            if !targets.contains(&target) {
+                                targets.push(target);
+                            }
+                        } else {
+                            self.call_graph.insert(path.addr, vec![target]);
+                        }
+                        
                         if !self.visited.contains(&target) {
                             // Recursively analyze the called function
                             self.analyze_function_stack(target)?;
@@ -782,7 +793,6 @@ impl Cpu {
                     path.addr += 1 + skip_size;
                     queue.push_back(path);
                 } else if (instr_flags & CPU_F_UNCOND_JUMP) != 0 {
-                    // For unconditional jumps, get the target and continue from there
                     if instr_mnemonic == "RJMP" {
                         let offset = opcode & 0x0FFF;
                         let offset = if (offset & 0x0800) != 0 {
@@ -795,15 +805,33 @@ impl Cpu {
                         path.addr = target;
                         queue.push_back(path);
                     } else if (instr_flags & CPU_F_IJMP) != 0 {
-                        // For indirect jumps, look up possible targets
+                        // ENHANCEMENT: Improved indirect jump handling
                         let targets = if self.jump_table.contains_key(&path.addr) {
                             self.jump_table[&path.addr].clone()
                         } else {
                             self.analyze_indirect_jump(path.addr)
                         };
                         
+                        // If no targets found through analysis, try pattern-based detection
+                        let targets = if targets.is_empty() {
+                            self.detect_jump_targets_by_pattern(path.addr)
+                        } else {
+                            targets
+                        };
+                        
                         // Fix the moved value error by iterating over references
                         for target in &targets {
+                            // Add to call graph for ICALL (indirect function calls)
+                            if instr_mnemonic == "ICALL" {
+                                if let Some(call_targets) = self.call_graph.get_mut(&path.addr) {
+                                    if !call_targets.contains(target) {
+                                        call_targets.push(*target);
+                                    }
+                                } else {
+                                    self.call_graph.insert(path.addr, vec![*target]);
+                                }
+                            }
+                            
                             let mut jump_path = path.clone();
                             jump_path.addr = *target;
                             queue.push_back(jump_path);
@@ -911,5 +939,48 @@ impl Cpu {
         None
     }
     
-    // ...existing code...
+    // New helper method to detect jump targets based on common patterns
+    fn detect_jump_targets_by_pattern(&self, addr: CpuAddr) -> Vec<CpuAddr> {
+        let mut targets = Vec::new();
+        let offset = (addr as usize) * 2;
+        
+        // Look for 8 bytes before the current instruction for table setup patterns
+        if offset >= 8 {
+            // Look for typical Z-register setup (r30/r31)
+            // LDI r30, lo8(table); LDI r31, hi8(table)
+            let instr1 = ((self.prog[offset-8] as u16) << 8) | (self.prog[offset-7] as u16);
+            let instr2 = ((self.prog[offset-6] as u16) << 8) | (self.prog[offset-5] as u16);
+            
+            if (instr1 & 0xF0F0) == 0xE0E0 && (instr2 & 0xF0F0) == 0xE0F0 {
+                // Extract immediate values
+                let zl = ((instr1 & 0x0F00) >> 4) | (instr1 & 0x000F);
+                let zh = ((instr2 & 0x0F00) >> 4) | (instr2 & 0x000F);
+                let table_addr = ((zh as u32) << 8) | (zl as u32);
+                
+                // Check if this is within program memory and could be a table
+                if table_addr * 2 < self.prog_size {
+                    // Look at potential table data (up to 8 entries)
+                    for i in 0..8 {
+                        if (table_addr as usize + i*2 + 1) * 2 < self.prog.len() {
+                            let entry_offset = (table_addr as usize + i*2) * 2;
+                            let entry = ((self.prog[entry_offset+1] as u32) << 8) | 
+                                        (self.prog[entry_offset] as u32) |
+                                        ((self.prog[entry_offset+3] as u32) << 24) |
+                                        ((self.prog[entry_offset+2] as u32) << 16);
+                            
+                            // Table entries are typically word addresses
+                            let target = entry / 2;
+                            
+                            // Verify this looks like a valid code address
+                            if target * 2 < self.prog_size && target > 0 {
+                                targets.push(target);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        targets
+    }
 }
