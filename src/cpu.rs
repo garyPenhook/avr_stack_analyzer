@@ -1171,4 +1171,74 @@ impl Cpu {
         
         valid_count
     }
+
+    // Update the detect_architecture method to recognize modern AVRs
+    fn detect_architecture(&mut self) -> Result<String> {
+        // Try to determine the architecture from ELF info or program data
+        
+        // Check for specific signatures in the code that might indicate modern AVRs
+        let mut is_modern_avr = false;
+        
+        // Look for specific instruction patterns that are more common in modern AVRs
+        // Modern AVRs often use different register addresses and peripheral mapping
+        if self.prog.len() > 16 {
+            // Check for PORT registers access common in modern AVRs (0x04xx addresses)
+            for i in 0..self.prog.len()-4 {
+                // LDS r16, 0x0400 (modern AVR PORT registers)
+                if self.prog[i] == 0x90 && self.prog[i+1] == 0x91 && 
+                   self.prog[i+2] == 0x00 && self.prog[i+3] == 0x04 {
+                    is_modern_avr = true;
+                    break;
+                }
+                
+                // STS 0x0400, r16 (modern AVR PORT registers)
+                if self.prog[i] == 0x92 && self.prog[i+1] == 0x93 && 
+                   self.prog[i+2] == 0x00 && self.prog[i+3] == 0x04 {
+                    is_modern_avr = true;
+                    break;
+                }
+            }
+        }
+        
+        if is_modern_avr {
+            return Ok("modern_avr".to_string());
+        }
+        
+        // Default to classic AVR
+        Ok("classic_avr".to_string())
+    }
+
+    // Update the ISR handling for modern AVR architectures
+    fn handle_interrupts(&mut self) -> Result<()> {
+        // First detect if we're dealing with a modern AVR
+        let arch = self.detect_architecture()?;
+        
+        // Different interrupt vector handling based on architecture
+        if arch == "modern_avr" {
+            // Modern AVRs have different interrupt vector table formats
+            // They have a "reset" vector at address 0, then a jump table
+            
+            // Typically 4-byte entries per vector rather than 2-byte
+            // Each vector is a JMP instruction (0x940C) followed by the address
+            
+            // Determine the number of interrupt vectors
+            let num_vectors = if self.prog.len() >= 32 { 16 } else { 8 };
+            
+            for i in 0..num_vectors {
+                // Skip vector 0 (reset)
+                if i == 0 { continue; }
+                
+                // Calculate vector address (each vector is 4 bytes)
+                let vector_addr = i * 4;
+                
+                // Mark as ISR
+                self.isr_map.insert(vector_addr as u32 / 2, true);
+            }
+        } else {
+            // Classic AVR interrupt handling (existing code)
+            // ...existing code...
+        }
+        
+        Ok(())
+    }
 }

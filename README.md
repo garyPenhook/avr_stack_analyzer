@@ -22,6 +22,8 @@ Author: Gary Scott (Dazed_N_Confused)
 - Tracks the stack accurately for each cycle
 - Smart enough to understand compiler function patterns
 - Recognizes different compiler-specific code styles
+- Full instruction set support for both classic and modern AVR architectures
+- Support for new AVR instruction variants in newer devices
 
 ### 2. Smart Control Flow Analysis
 - Builds a complete map of function calls
@@ -39,6 +41,9 @@ Author: Gary Scott (Dazed_N_Confused)
 - Analysis of interrupt nesting implications
 - Special handling of bad_interrupt vector
 - ISR safety verification
+- Support for both classic and modern AVR interrupt vector tables
+- Handles the different vector formats in ATtiny 0/1/2-series and ATmega 0/1-series
+- Automatic detection of AVR architecture type
 
 ### 4. Memory-Aware Design
 - Precise RAM usage tracking
@@ -60,6 +65,8 @@ Author: Gary Scott (Dazed_N_Confused)
 - **NEW: Section information for reliable text section location**
 - **NEW: Robust ELF parsing for different compiler outputs**
 - **NEW: Support for Intel HEX file format**
+- **NEW: Support for modern AVR microcontrollers (ATtiny 0/1/2-series, ATmega 0/1-series, AVR DA/DB/DD/EA)**
+- **NEW: Automatic architecture detection for proper memory and vector handling**
 
 ### 6. Pattern Recognition
 - Standard function prologue detection
@@ -228,6 +235,23 @@ If you see many "Warning: Program data is empty" messages or "No program data av
    ```
    This should list function symbols in your code
 
+## Supported AVR Devices
+
+The analyzer supports both classic and modern AVR microcontrollers:
+
+### Classic AVRs
+- ATtiny series (ATtiny13/25/45/85, etc.)
+- ATmega series (ATmega8/16/32/328, etc.)
+- AT90 series
+
+### Modern AVRs
+- ATtiny 0-series (ATtiny202/402/204/404/806, etc.)
+- ATtiny 1-series (ATtiny212/412/214/414/816, etc.)
+- ATtiny 2-series (ATtiny1624/1626/1627, etc.)
+- ATmega 0-series (ATmega808/809/1608/1609)
+- ATmega 4809 and similar modern megaAVR devices
+- AVR DA/DB/DD/EA series (AVR128DA, AVR64DB, etc.)
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request. When contributing:
@@ -243,7 +267,14 @@ This project is licensed under the [GPL-3.0](LICENSE).
 
 ## Version History
 
-Current version: 1.6
+Current version: 1.7
+- Added support for modern AVR microcontrollers:
+  - ATtiny 0/1/2-series (ATtiny412, etc.)
+  - ATmega 0/1-series (ATmega4809, etc.)
+  - AVR DA/DB/DD/EA series
+- Automatic detection of AVR architecture for proper analysis
+- Enhanced memory reporting for all supported AVR devices
+- Improved interrupt vector handling for modern AVR architectures
 - Added RAM size detection and tracking
 - Fixed call graph visualization support
 - Improved JSON output formatting

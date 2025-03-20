@@ -956,8 +956,9 @@ impl AvrStack {
         let ram_start = 32; // AVR registers take the first 32 bytes
         let estimated_ram_usage = ram_start + max_stack;
         
-        // Typical AVR RAM sizes
+        // AVR RAM sizes - Updated to include modern AVRs
         let ram_sizes = [
+            // Classic AVRs
             ("ATtiny4/5/9/10", 32),
             ("ATtiny13", 64),
             ("ATtiny24/44/84", 128),
@@ -974,10 +975,45 @@ impl AvrStack {
             ("ATmega328/P", 2048),
             ("ATmega64/128", 4096),
             ("ATmega640/1280/2560", 8192),
+            
+            // Modern AVRs - ATtiny 0-series/1-series/2-series
+            ("ATtiny202/212/402/412", 256),
+            ("ATtiny204/214/404/414", 256),
+            ("ATtiny406/416/806/816", 512),
+            ("ATtiny807/817/1607/1617", 1024),
+            ("ATtiny3216/3217", 2048),
+            ("ATtiny1604/1606/1614/1616", 1024),
+            ("ATtiny3224/3226/3227", 3072),
+            
+            // Modern AVRs - ATmega 0-series/1-series
+            ("ATmega808/809/1608/1609", 1024),
+            ("ATmega3208/3209", 4096),
+            ("ATmega4808/4809", 6144),
+            ("ATmega3208/3209", 4096),
+            ("ATmega4808/4809", 6144),
+            
+            // AVR DA/DB/DD Series
+            ("AVR128DA28/32/48/64", 16384),
+            ("AVR64DA28/32/48/64", 8192),
+            ("AVR32DA28/32/48/64", 4096),
+            ("AVR128DB28/32/48/64", 16384),
+            ("AVR64DB28/32/48/64", 8192),
+            ("AVR32DB28/32/48/64", 4096),
+            ("AVR64DD14/20/28/32", 8192),
+            ("AVR32DD14/20/28/32", 4096),
+            ("AVR16DD14/20/28/32", 2048),
+            
+            // AVR EA Series
+            ("AVR64EA28/32/48", 8192),
+            ("AVR32EA28/32/48", 4096),
+            ("AVR16EA28/32/48", 2048),
         ];
         
         println!("\nRAM Usage Estimates:");
         println!("---------------------------------------------------");
+        println!("{:30} {:6} {:8} {}", "DEVICE", "RAM", "USAGE %", "STATUS");
+        println!("---------------------------------------------------");
+        
         for (device, ram) in ram_sizes.iter() {
             let usage_percent = (estimated_ram_usage as f32 * 100.0) / (*ram as f32);
             let status = if usage_percent > 90.0 {
@@ -988,7 +1024,7 @@ impl AvrStack {
                 "OK"
             };
             
-            println!("{:25} {:4} bytes: {:6.1}% used - {}", 
+            println!("{:30} {:6} {:7.1}% {}", 
                     device, ram, usage_percent, status);
         }
         
