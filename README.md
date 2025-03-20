@@ -6,6 +6,10 @@ A sophisticated tool for analyzing stack usage in AVR microcontroller binaries t
 
 AVR Stack Analyzer helps you figure out how much stack your AVR microcontroller programs are using. It works by looking at your compiled ELF files and actually simulating the AVR instructions to track stack operations in real-time. This is super helpful for embedded developers who want to avoid those nasty stack overflows that can make AVR-based systems go haywire.
 
+## Credits
+
+Created by Gary Scott (Dazed_N_Confused)
+
 ## Key Features
 
 ### 1. Real AVR Instruction Simulation

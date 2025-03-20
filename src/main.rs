@@ -1,5 +1,6 @@
 // AVR Stack - Stack Usage Analyzer for AVR Binaries
 // Version 37 (Rust Rewrite)
+// Created by Gary Scott (Dazed_N_Confused)
 
 use std::process;
 use std::path::Path;
