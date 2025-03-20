@@ -57,6 +57,9 @@ Author: Gary Scott (Dazed_N_Confused)
 - Relocation processing
 - Text section analysis
 - Function entry point detection
+- **NEW: Section information for reliable text section location**
+- **NEW: Robust ELF parsing for different compiler outputs**
+- **NEW: Support for Intel HEX file format**
 
 ### 6. Pattern Recognition
 - Standard function prologue detection
@@ -65,6 +68,9 @@ Author: Gary Scott (Dazed_N_Confused)
 - Optimization level awareness
 - Variable-length pattern matching
 - Compiler-specific pattern handling
+- **NEW: Enhanced detection of stack manipulation instructions**
+  - Recognition of compiler-specific stack allocation methods (e.g., "SBIW r28,N" for locals)
+  - Better handling of specialized stack frames that don't follow standard patterns
 
 ### 7. Output and Reporting
 - Multiple output formats:
@@ -87,6 +93,7 @@ Author: Gary Scott (Dazed_N_Confused)
   - object - ELF file parsing
   - serde - JSON serialization
   - serde_json - JSON formatting and manipulation
+  - hex - Intel HEX file parsing
 
 ## Installation
 
@@ -122,6 +129,7 @@ avr_stack [OPTIONS] <INPUT_FILE>
 - `--json` - Output in JSON format
 - `--json-compact` - Output compact JSON format
 - `--call-graph` - Generate DOT file for call graph visualization
+- `--verbose` - Show detailed warnings and analysis messages (disabled by default)
 
 ### Advanced Usage Examples
 
@@ -187,6 +195,38 @@ If you encounter compilation errors:
 3. Check for specific error messages in the build output
 4. Verify your AVR ELF file format is supported
 
+### "Program data is empty" errors
+
+If you see many "Warning: Program data is empty" messages or "No program data available" errors:
+
+1. **Your ELF file might be stripped**
+   - Use the original, unstripped ELF file directly from your compiler
+   - If using avr-gcc, compile with the `-g` flag to include debug information
+
+2. **The file format may not be fully supported**
+   - Try using a different output format from your compiler
+   - HEX files sometimes don't contain all the necessary information
+
+3. **The input may not be a valid ELF file**
+   - Verify you're using the correct file
+   - Some post-processing tools can corrupt ELF files
+
+4. **Suppress excessive warnings**
+   - The tool now automatically suppresses most warnings about out-of-bounds addresses
+   - Use the `--verbose` option if you need to see all warnings for debugging purposes
+
+5. **Command to verify your ELF file has code sections:**
+   ```
+   avr-objdump -h your_file.elf
+   ```
+   Look for a `.text` section with non-zero size
+
+6. **Manual symbol dumping:**
+   ```
+   avr-nm your_file.elf
+   ```
+   This should list function symbols in your code
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request. When contributing:
@@ -202,8 +242,18 @@ This project is licensed under the [GPL-3.0](LICENSE).
 
 ## Version History
 
-Current version: 1.5
+Current version: 1.6
 - Added RAM size detection and tracking
 - Fixed call graph visualization support
 - Improved JSON output formatting
 - Enhanced memory usage recommendations
+- **NEW: Suppressed excessive warning messages by default**
+  - Added `--verbose` option to show all warnings if needed
+  - Better handling of empty program data
+  - Improved output readability with thousands of functions
+- **NEW: Enhanced detection of stack manipulation instructions**
+  - Recognition of compiler-specific stack allocation methods (e.g., "SBIW r28,N" for locals)
+  - Better handling of specialized stack frames that don't follow standard patterns
+- **NEW: Section information for reliable text section location**
+- **NEW: Robust ELF parsing for different compiler outputs**
+- **NEW: Support for Intel HEX file format**

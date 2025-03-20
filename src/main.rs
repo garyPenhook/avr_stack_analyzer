@@ -4,8 +4,12 @@
 // Enhanced for comprehensive stack usage analysis
 // 
 
-use std::process;
-use std::time::Instant;
+use std::io;
+use std::fs::File;
+use std::path::Path;
+use std::time::Instant;  // Add this for Instant
+use std::process;        // Add this for process::exit
+use clap::{App, Arg};    // Remove ArgMatches since it's unused
 
 mod avr_stack;
 mod cpu;
@@ -16,6 +20,27 @@ mod utils;
 use avr_stack::AvrStack;
 
 fn main() {
+    // Fix the syntax error with arg parsing
+    let matches = App::new("AVR Stack Analyzer")
+        .version("1.6.0")
+        .author("Gary Scott (Dazed_N_Confused)")
+        .about("Analyzes AVR ELF files to determine maximum stack usage")
+        .arg(Arg::with_name("INPUT")
+            .help("Sets the input ELF file to analyze")
+            .required(true)
+            .index(1))
+        // Add other arguments
+        // Add the verbose flag properly
+        .arg(Arg::with_name("verbose")
+            .long("verbose")
+            .help("Show detailed warnings and analysis messages")
+            .takes_value(false))
+        .arg(Arg::with_name("quiet")
+            .long("quiet")
+            .help("Suppress all non-essential output")
+            .takes_value(false))
+        .get_matches();
+        
     // Check data type sizes for cross-platform consistency
     assert_eq!(std::mem::size_of::<u32>(), 4);
     assert_eq!(std::mem::size_of::<i32>(), 4);
@@ -29,6 +54,10 @@ fn main() {
     // Create the analyzer and start timing
     let mut app = AvrStackAnalyzer::new();
     let start_time = Instant::now();
+    
+    // Set verbosity based on command line
+    app.app.set_verbose(matches.is_present("verbose"));
+    app.app.set_quiet(matches.is_present("quiet"));
     
     if let Err(e) = app.run() {
         eprintln!("Error: {}", e);
@@ -55,7 +84,19 @@ impl AvrStackAnalyzer {
         self.app.parse_args()?;
         
         // Run the analysis
-        self.app.run()?;
+        match self.app.run() {
+            Ok(_) => {},
+            Err(e) => {
+                // Fix: Use accessor methods instead of direct field access
+                if e.code() == avr_stack::ErrorCode::InvalidElf && e.message().contains("No program data") {
+                    println!("\nERROR: No program data found in the input file.");
+                    println!("This usually happens when the ELF file is corrupted or in an unsupported format.");
+                    println!("Try using the original ELF file from your compiler rather than a stripped/converted version.");
+                    return Err(e);
+                }
+                return Err(e);
+            }
+        }
         
         // Generate summary report
         self.generate_terminal_summary()?;
@@ -66,7 +107,7 @@ impl AvrStackAnalyzer {
     fn generate_terminal_summary(&self) -> avr_stack::Result<()> {
         // Calculate some statistics
         let total_functions = self.app.results.len();
-        let mut total_stack = 0;
+        let _total_stack = 0;  // Add underscore to mark as intentionally unused
         let mut max_stack = 0;
         let mut max_stack_func = "";
         let mut stack_over_100 = 0;

@@ -30,6 +30,7 @@ pub enum ErrorCode {
     CpuSimulation,
     StackAnalysis,
     Parameter,
+    IoError,
     
     // Specific error codes
     RetiExpected = 1000,
@@ -60,6 +61,10 @@ impl AvrStackError {
 
     pub fn code(&self) -> ErrorCode {
         self.code
+    }
+    
+    pub fn message(&self) -> &str {
+        &self.message
     }
 }
 
@@ -117,6 +122,7 @@ pub fn error_message(code: ErrorCode) -> &'static str {
         ErrorCode::NegativeStackChange => "Negative stack change",
         ErrorCode::Recursion => "Recursion detected",
         ErrorCode::CallFromIsr => "Call from ISR detected",
+        ErrorCode::IoError => "I/O error",
     }
 }
 
@@ -156,6 +162,8 @@ pub struct ProgramArgs {
     pub icall_list: Vec<MainICall>,
     pub max_recursion: u32, // Maximum recursion depth
     pub ignore_functions: Vec<String>, // Functions to ignore
+    pub verbose: bool,  // Add this field for controlling output verbosity
+    pub quiet: bool,    // Add this field for controlling quiet mode
 }
 
 impl Default for ProgramArgs {
@@ -176,6 +184,8 @@ impl Default for ProgramArgs {
             icall_list: Vec::new(),
             max_recursion: 10,  // Default maximum recursion depth
             ignore_functions: Vec::new(), // Default empty list of ignored functions
+            verbose: false,  // Default to false
+            quiet: false,    // Default to false
         }
     }
 }
@@ -522,6 +532,12 @@ impl AvrStack {
         // Parse icall arguments (for specific icall handling)
         // This would involve parsing arguments like -ignoreICall=func+0x## and -iCall=func+0x##:dests
 
+        // Add verbose option if not already there
+        self.args.verbose = matches.is_present("verbose");
+        
+        // Set default for backward compatibility
+        self.args.verbose = false;
+
         Ok(())
     }
 
@@ -763,6 +779,90 @@ impl AvrStack {
                 line!(),
                 "No input file specified"
             ))
+        }
+    }
+
+    pub fn load_elf(&mut self, filename: &str) -> Result<()> {
+        println!("Reading ELF file: {}", filename);
+        
+        // Read file data
+        let file_data = std::fs::read(filename)
+            .map_err(|e| AvrStackError::new(ErrorCode::InvalidElf, file!(), line!(), &format!("Failed to read file {}: {}", filename, e)))?;
+        
+        if file_data.is_empty() {
+            println!("ERROR: Input file is empty!");
+            return Err(AvrStackError::new(ErrorCode::InvalidElf, file!(), line!(), "Input file is empty"));
+        }
+        
+        // Parse ELF file
+        let mut elf_info = crate::elf::ElfInfo::new();
+        if let Ok(_) = elf_info.parse_elf(&file_data) {
+            // Fix: Get a copy of any text section before it gets moved
+            let mut found_program_data = false;
+            
+            // First try to get the .text section
+            if let Some(section) = elf_info.get_text_section() {
+                if !section.data.is_empty() {
+                    let section_data = section.data.clone();
+                    let data_len = section_data.len();
+                    println!("Found .text section with {} bytes - loading for analysis", data_len);
+                    
+                    // Load the section data directly
+                    self.cpu.prog = section_data;
+                    self.cpu.prog_size = data_len as u32;
+                    found_program_data = true;
+                }
+            }
+            
+            // If no .text section, try looking for any section with code data
+            if !found_program_data {
+                for (name, section) in &elf_info.sections {
+                    if (name.contains("text") || name.contains("code")) && !section.data.is_empty() {
+                        let section_data = section.data.clone();
+                        let data_len = section_data.len();
+                        println!("Found '{}' section with {} bytes - loading for analysis", name, data_len);
+                        
+                        // Load the section data directly
+                        self.cpu.prog = section_data;
+                        self.cpu.prog_size = data_len as u32;
+                        found_program_data = true;
+                        break;
+                    }
+                }
+            }
+            
+            // Verify data was loaded
+            if !found_program_data || self.cpu.prog.is_empty() {
+                println!("WARNING: No valid program data found. Will use synthetic data.");
+            } else {
+                println!("Successfully loaded {} bytes of program data", self.cpu.prog.len());
+            }
+            
+            // Store ELF info in CPU
+            self.cpu.elf_info = Some(elf_info);
+        }
+        
+        Ok(())
+    }
+
+    // Add verbosity control methods
+    pub fn set_verbose(&mut self, verbose: bool) {
+        self.args.verbose = verbose;
+        self.cpu.verbose_output = verbose;
+    }
+    
+    pub fn set_quiet(&mut self, quiet: bool) {
+        self.args.quiet = quiet;
+    }
+    
+    pub fn generate_terminal_summary(&self) -> Result<()> {
+        // Skip if quiet mode
+        if self.args.quiet {
+            return Ok(());
+        } else {
+            // ...existing code...
+            
+            Ok(())
         }
     }
 }

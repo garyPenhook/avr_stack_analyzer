@@ -11,6 +11,8 @@ pub mod cpu;
 pub mod elf;
 pub mod analysis;
 pub mod utils;
+pub mod debug_utils;
+// Remove binary_loader module since we integrated it directly
 
 // Re-export key items for easier usage
 pub use avr_stack::AvrStack;
