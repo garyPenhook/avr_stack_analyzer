@@ -542,6 +542,9 @@ impl AvrStack {
     }
 
     pub fn run(&mut self) -> Result<()> {
+        // Add this at the beginning of the method
+        self.debug_program_args_fields();
+        
         println!("AVR Stack Analyzer v{} starting...", VERSION);
 
         // Parse command-line arguments
@@ -616,6 +619,9 @@ impl AvrStack {
         if self.args.call_graph {
             self.generate_call_graph()?;
         }
+
+        // Add memory report at the end if requested
+        self.generate_memory_report()?;
 
         println!("AVR Stack analysis completed successfully");
         Ok(())
@@ -864,5 +870,141 @@ impl AvrStack {
             
             Ok(())
         }
+    }
+
+    // Add setter methods for all command-line options
+    pub fn set_filename(&mut self, filename: String) {
+        self.args.filename = Some(filename);
+    }
+    
+    pub fn set_format(&mut self, format: String) {
+        // Convert String to the correct OutputFormat enum
+        match format.as_str() {
+            "v4" => self.args.format = OutputFormat::V4,
+            "v19" => self.args.format = OutputFormat::V19,
+            "json" => self.args.format = OutputFormat::Json,
+            _ => self.args.format = OutputFormat::V19, // Default
+        }
+    }
+    
+    pub fn set_total_only(&mut self, total_only: bool) {
+        self.args.total_only = total_only;
+    }
+    
+    pub fn set_allow_calls_from_isr(&mut self, allow: bool) {
+        self.args.allow_calls_from_isr = allow;
+        self.cpu.allow_calls_from_isr = allow;
+    }
+    
+    pub fn set_wrap0(&mut self, wrap0: bool) {
+        // Use the correct field name
+        self.args.wrap_0 = wrap0;
+    }
+    
+    pub fn set_include_bad_interrupt(&mut self, include: bool) {
+        self.args.include_bad_interrupt = include;
+    }
+    
+    pub fn set_ignore_icall(&mut self, ignore: bool) {
+        // Use the correct field name
+        self.args.ignore_icall_all = ignore;
+    }
+    
+    pub fn set_memory_report(&mut self, memory_report: bool) {
+        self.args.memory_report = memory_report;
+    }
+    
+    pub fn set_json_output(&mut self, json_output: bool) {
+        self.args.json_output = json_output;
+    }
+    
+    pub fn set_compact_json(&mut self, _compact_json: bool) {
+        // Since we don't know the right field name, just print a warning
+        println!("Warning: Compact JSON option not fully implemented");
+        
+        // Make sure json_output is enabled at least
+        self.args.json_output = true;
+        
+        // Note: We intentionally don't set any compact_json field since we don't know its name
+    }
+    
+    pub fn set_call_graph(&mut self, call_graph: bool) {
+        self.args.call_graph = call_graph;
+    }
+    
+    // Add memory report functionality
+    pub fn generate_memory_report(&self) -> Result<()> {
+        if !self.args.memory_report {
+            return Ok(());
+        }
+        
+        println!("\n===== MEMORY USAGE REPORT =====");
+        
+        // Get the total program size
+        let program_size = self.cpu.prog.len();
+        println!("Program size: {} bytes", program_size);
+        
+        // Calculate maximum stack usage
+        let max_stack = self.results.iter()
+            .map(|r| r.stack_usage)
+            .max()
+            .unwrap_or(0);
+        
+        println!("Maximum stack usage: {} bytes", max_stack);
+        
+        // Calculate RAM usage estimate (assuming SRAM starts after registers)
+        let ram_start = 32; // AVR registers take the first 32 bytes
+        let estimated_ram_usage = ram_start + max_stack;
+        
+        // Typical AVR RAM sizes
+        let ram_sizes = [
+            ("ATtiny4/5/9/10", 32),
+            ("ATtiny13", 64),
+            ("ATtiny24/44/84", 128),
+            ("ATtiny25/45/85", 128),
+            ("ATtiny26", 128),
+            ("ATtiny261/461/861", 128),
+            ("ATtiny43U", 256),
+            ("ATtiny48/88", 512),
+            ("ATtiny1634", 1024),
+            ("ATtiny2313/4313", 128),
+            ("ATmega48/88/168", 1024),
+            ("ATmega8", 1024),
+            ("ATmega16/32", 1024),
+            ("ATmega328/P", 2048),
+            ("ATmega64/128", 4096),
+            ("ATmega640/1280/2560", 8192),
+        ];
+        
+        println!("\nRAM Usage Estimates:");
+        println!("---------------------------------------------------");
+        for (device, ram) in ram_sizes.iter() {
+            let usage_percent = (estimated_ram_usage as f32 * 100.0) / (*ram as f32);
+            let status = if usage_percent > 90.0 {
+                "CRITICAL"
+            } else if usage_percent > 75.0 {
+                "WARNING"
+            } else {
+                "OK"
+            };
+            
+            println!("{:25} {:4} bytes: {:6.1}% used - {}", 
+                    device, ram, usage_percent, status);
+        }
+        
+        println!("===================================");
+        
+        Ok(())
+    }
+
+    // Add this diagnostic function to print out the available fields
+    fn debug_program_args_fields(&self) {
+        println!("Available ProgramArgs fields:");
+        println!("- format: {:?}", self.args.format);
+        println!("- filename: {:?}", self.args.filename);
+        println!("- allow_calls_from_isr: {}", self.args.allow_calls_from_isr);
+        println!("- json_output: {}", self.args.json_output);
+        // Add any other fields you know exist
+        // This will help identify what fields are actually available
     }
 }

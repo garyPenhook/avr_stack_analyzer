@@ -125,11 +125,12 @@ avr_stack [OPTIONS] <INPUT_FILE>
 - `--wrap0` - Allow wrapped addresses at address 0
 - `--include-bad-interrupt` - Include bad_interrupt in analysis
 - `--ignore-icall` - Ignore all indirect calls
-- `--memory-report` - Show memory statistics
+- `--memory-report` - Show memory statistics and RAM usage estimates
 - `--json` - Output in JSON format
 - `--json-compact` - Output compact JSON format
 - `--call-graph` - Generate DOT file for call graph visualization
 - `--verbose` - Show detailed warnings and analysis messages (disabled by default)
+- `--quiet` - Suppress non-essential output
 
 ### Advanced Usage Examples
 

@@ -7,9 +7,9 @@
 use std::io;
 use std::fs::File;
 use std::path::Path;
-use std::time::Instant;  // Add this for Instant
-use std::process;        // Add this for process::exit
-use clap::{App, Arg};    // Remove ArgMatches since it's unused
+use std::time::Instant;
+use std::process;
+use clap::{App, Arg};
 
 mod avr_stack;
 mod cpu;
@@ -20,7 +20,6 @@ mod utils;
 use avr_stack::AvrStack;
 
 fn main() {
-    // Fix the syntax error with arg parsing
     let matches = App::new("AVR Stack Analyzer")
         .version("1.6.0")
         .author("Gary Scott (Dazed_N_Confused)")
@@ -29,18 +28,45 @@ fn main() {
             .help("Sets the input ELF file to analyze")
             .required(true)
             .index(1))
-        // Add other arguments
-        // Add the verbose flag properly
+        .arg(Arg::with_name("format")
+            .long("format")
+            .help("Output format (v4, v19, or json)")
+            .takes_value(true))
+        .arg(Arg::with_name("total-only")
+            .long("total-only")
+            .help("Print only total stack usage"))
+        .arg(Arg::with_name("allow-calls-from-isr")
+            .long("allow-calls-from-isr")
+            .help("Don't error on calls from ISRs"))
+        .arg(Arg::with_name("wrap0")
+            .long("wrap0")
+            .help("Allow wrapped addresses at address 0"))
+        .arg(Arg::with_name("include-bad-interrupt")
+            .long("include-bad-interrupt")
+            .help("Include bad_interrupt in analysis"))
+        .arg(Arg::with_name("ignore-icall")
+            .long("ignore-icall")
+            .help("Ignore all indirect calls"))
+        .arg(Arg::with_name("memory-report")
+            .long("memory-report")
+            .help("Show memory statistics"))
+        .arg(Arg::with_name("json")
+            .long("json")
+            .help("Output in JSON format"))
+        .arg(Arg::with_name("json-compact")
+            .long("json-compact")
+            .help("Output compact JSON format"))
+        .arg(Arg::with_name("call-graph")
+            .long("call-graph")
+            .help("Generate DOT file for call graph visualization"))
         .arg(Arg::with_name("verbose")
             .long("verbose")
-            .help("Show detailed warnings and analysis messages")
-            .takes_value(false))
+            .help("Show detailed warnings and analysis messages"))
         .arg(Arg::with_name("quiet")
             .long("quiet")
-            .help("Suppress all non-essential output")
-            .takes_value(false))
+            .help("Suppress non-essential output"))
         .get_matches();
-        
+
     // Check data type sizes for cross-platform consistency
     assert_eq!(std::mem::size_of::<u32>(), 4);
     assert_eq!(std::mem::size_of::<i32>(), 4);
@@ -51,21 +77,67 @@ fn main() {
     
     println!("AVR Stack Analyzer starting...");
     
-    // Create the analyzer and start timing
-    let mut app = AvrStackAnalyzer::new();
-    let start_time = Instant::now();
-    
-    // Set verbosity based on command line
-    app.app.set_verbose(matches.is_present("verbose"));
-    app.app.set_quiet(matches.is_present("quiet"));
-    
-    if let Err(e) = app.run() {
-        eprintln!("Error: {}", e);
-        process::exit(1);
+    // Parse all command line arguments and set them in the app
+    if let Some(input_file) = matches.value_of("INPUT") {
+        let mut app = AvrStackAnalyzer::new();
+        app.app.set_filename(input_file.to_string());
+        
+        // Set options based on command-line flags
+        if matches.is_present("total-only") {
+            app.app.set_total_only(true);
+        }
+        
+        if matches.is_present("allow-calls-from-isr") {
+            app.app.set_allow_calls_from_isr(true);
+        }
+        
+        if matches.is_present("wrap0") {
+            app.app.set_wrap0(true);
+        }
+        
+        if matches.is_present("include-bad-interrupt") {
+            app.app.set_include_bad_interrupt(true);
+        }
+        
+        if matches.is_present("ignore-icall") {
+            app.app.set_ignore_icall(true);
+        }
+        
+        if matches.is_present("memory-report") {
+            app.app.set_memory_report(true);
+        }
+        
+        if matches.is_present("json") {
+            app.app.set_json_output(true);
+        }
+        
+        if matches.is_present("json-compact") {
+            app.app.set_compact_json(true);
+        }
+        
+        if matches.is_present("call-graph") {
+            app.app.set_call_graph(true);
+        }
+        
+        if let Some(format_val) = matches.value_of("format") {
+            app.app.set_format(format_val.to_string());
+        }
+        
+        // Set verbosity options
+        app.app.set_verbose(matches.is_present("verbose"));
+        app.app.set_quiet(matches.is_present("quiet"));
+        
+        // Run the analysis with properly set options
+        let start_time = Instant::now();
+        
+        if let Err(e) = app.run() {
+            println!("Error: {}", e);
+            process::exit(1);
+        }
+        
+        let duration = start_time.elapsed();
+        println!("Analysis completed in {:.2} seconds", duration.as_secs_f32());
     }
-    
-    let elapsed = start_time.elapsed();
-    println!("Analysis completed in {:.2} seconds", elapsed.as_secs_f64());
 }
 
 struct AvrStackAnalyzer {

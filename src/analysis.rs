@@ -5,7 +5,6 @@ use std::cmp::Ordering;
 use crate::avr_stack::{Result, ProgramArgs, StackAnalysisResult};
 use crate::elf::ElfInfo;
 use crate::cpu::{Cpu, CpuAddr};
-use std::io::Write;
 
 // Add PatternMatcher struct that was missing
 pub struct PatternMatcher {
