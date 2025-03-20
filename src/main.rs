@@ -1,6 +1,8 @@
 // AVR Stack - My fancy stack analyzer for AVR chips
-// Version 37 (Finally rewrote the whole thing in Rust!)
+// Version 37
 // Created by Gary Scott (Dazed_N_Confused)
+// rustc 1.85.0 (4d91de4e4 2025-02-17)
+// 
 
 use std::process;
 use std::path::Path;
