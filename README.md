@@ -8,7 +8,7 @@ AVR Stack Analyzer helps you figure out how much stack your AVR microcontroller 
 
 ## Credits
 
-Created by Gary Scott (Dazed_N_Confused)
+Author: Gary Scott (Dazed_N_Confused)
 
 ## Key Features
 
