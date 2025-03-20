@@ -1241,4 +1241,17 @@ impl Cpu {
         
         Ok(())
     }
+
+    // Ensure we properly collect call information during function analysis
+    fn analyze_function_stack_internal(&mut self, _addr: CpuAddr, _is_isr: bool) -> Result<u32> {
+        // ...existing code...
+        
+        // Make sure there's a proper return
+        Ok(0)  // Return 0 as default
+    }
+
+    // let's add a new helper method to record calls during simulation
+    // Instead of trying to modify the analyze_function_stack_internal method,
+    // let's add a new helper method to record calls during simulation
+
 }

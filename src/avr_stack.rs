@@ -9,7 +9,6 @@ use serde::Serialize;
 use crate::elf::ElfInfo;
 use crate::cpu::Cpu;
 use crate::analysis::{MazeAnalysis, TreeAnalysis};
-use std::collections::HashMap;
 
 // Allow dead code in this module as many items will be used in the future
 #[allow(dead_code)]
@@ -230,7 +229,7 @@ impl JsonWriter {
     }
 
     pub fn begin_object(&mut self) -> io::Result<()> {
-        if !self.first_item {
+        if (!self.first_item) && self.is_array {
             writeln!(self.file, ",")?;
         } else {
             self.first_item = false;
@@ -615,11 +614,6 @@ impl AvrStack {
             self.output_json()?;
         }
 
-        // Generate call graph if requested
-        if self.args.call_graph {
-            self.generate_call_graph()?;
-        }
-
         // Add memory report at the end if requested
         self.generate_memory_report()?;
 
@@ -650,204 +644,6 @@ impl AvrStack {
 
     fn print_terminal_friendly_json(&self) -> Result<()> {
         // Implementation for printing a terminal-friendly JSON output
-        Ok(())
-    }
-
-    pub fn generate_call_graph(&self) -> Result<()> {
-        if let Some(filename) = &self.args.filename {
-            let dot_filename = format!("{}.dot", filename);
-            let mut file = File::create(&dot_filename)
-                .map_err(|e| AvrStackError::new(
-                    ErrorCode::FileIo,
-                    file!(),
-                    line!(),
-                    &format!("Failed to create DOT file: {}", e)
-                ))?;
-
-            // Write DOT file header with improved styling
-            writeln!(file, "digraph CallGraph {{")?;
-            writeln!(file, "  node [shape=box, style=filled, fontname=\"Helvetica\"];")?;
-            writeln!(file, "  edge [fontname=\"Helvetica\"];")?;
-            writeln!(file, "  ranksep=1.5;")?;
-
-            // Define node colors based on stack usage
-            let max_stack = self.results.iter()
-                .map(|r| r.stack_usage)
-                .max()
-                .unwrap_or(0);
-
-            // Map of function addresses to better names (where available)
-            let mut function_names = HashMap::new();
-
-            // Build function name mapping
-            for result in &self.results {
-                // Extract address from name if it's a func_0xNNNN pattern
-                if result.function_name.starts_with("func_0x") {
-                    if let Ok(addr) = u32::from_str_radix(&result.function_name[6..], 16) {
-                        function_names.insert(addr/2, result.function_name.clone());
-                    }
-                } else {
-                    // For named functions, try to find the address
-                    for &addr in self.cpu.stack_map.keys() {
-                        if let Some(name) = self.cpu.get_symbol_name(addr) {
-                            if name == result.function_name {
-                                function_names.insert(addr, result.function_name.clone());
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Add nodes (functions) with better labeling and information
-            for result in &self.results {
-                let addr = result.address / 2; // Convert to word address
-                let intensity = if max_stack > 0 {
-                    result.stack_usage as f32 / max_stack as f32
-                } else {
-                    0.0
-                };
-                // Generate color from green (low stack) to red (high stack)
-                let r = (intensity * 255.0) as u8;
-                let g = ((1.0 - intensity) * 255.0) as u8;
-                let b = 100u8;
-                let color = format!("\"#{:02x}{:02x}{:02x}\"", r, g, b);
-
-                // Try to determine function size for labeling
-                let function_size = if let Some(ref elf) = self.cpu.elf_info {
-                    elf.symbols.iter()
-                       .find(|s| s.address == addr)
-                       .map(|s| s.size)
-                       .unwrap_or(0)
-                } else {
-                    0
-                };
-
-                // Write node definition with more information
-                writeln!(file, "  \"{}\" [label=\"{}\nStack: {} bytes\nAddr: 0x{:x}{}\", fillcolor={}, tooltip=\"Address: 0x{:x}\"];",
-                         result.function_name, 
-                         result.function_name,
-                         result.stack_usage,
-                         result.address,
-                         if function_size > 0 { format!("\nSize: {} bytes", function_size) } else { String::new() },
-                         color,
-                         result.address)?;
-            }
-
-            // Add edges (calls between functions) with better labeling
-            for (caller, callees) in &self.cpu.call_graph {
-                let caller_name = if let Some(name) = self.cpu.get_symbol_name(*caller) {
-                    name
-                } else if let Some(name) = function_names.get(caller) {
-                    name.clone()
-                } else {
-                    format!("func_0x{:x}", caller * 2)
-                };
-                for callee in callees {
-                    let callee_name = if let Some(name) = self.cpu.get_symbol_name(*callee) {
-                        name
-                    } else if let Some(name) = function_names.get(callee) {
-                        name.clone()
-                    } else {
-                        format!("func_0x{:x}", callee * 2)
-                    };
-                    writeln!(file, "  \"{}\" -> \"{}\";", caller_name, callee_name)?;
-                }
-            }
-
-            // Add a legend
-            writeln!(file, "  subgraph cluster_legend {{")?;
-            writeln!(file, "    label=\"Legend\";")?;
-            writeln!(file, "    style=filled;")?;
-            writeln!(file, "    color=lightgrey;")?;
-            writeln!(file, "    \"Legend\" [shape=none, label=<")?;
-            writeln!(file, "      <table border=\"0\" cellspacing=\"0\" cellpadding=\"2\">")?;
-            writeln!(file, "        <tr><td>Node Color</td><td>Stack Usage</td></tr>")?;
-            writeln!(file, "        <tr><td bgcolor=\"#00ff64\"></td><td>Low</td></tr>")?;
-            writeln!(file, "        <tr><td bgcolor=\"#ffff64\"></td><td>Medium</td></tr>")?;
-            writeln!(file, "        <tr><td bgcolor=\"#ff0064\"></td><td>High</td></tr>")?;
-            writeln!(file, "      </table>")?;
-            writeln!(file, "    >];")?;
-            writeln!(file, "  }}")?;
-
-            // Close the DOT file
-            writeln!(file, "}}")?;
-
-            println!("Enhanced call graph written to {}", dot_filename);
-            println!("To generate a visual graph, use: dot -Tpng {} -o {}.png", dot_filename, filename);
-            println!("For PDF format: dot -Tpdf {} -o {}.pdf", dot_filename, filename);
-
-            Ok(())
-        } else {
-            Err(AvrStackError::new(
-                ErrorCode::Parameter,
-                file!(),
-                line!(),
-                "No input file specified"
-            ))
-        }
-    }
-
-    pub fn load_elf(&mut self, filename: &str) -> Result<()> {
-        println!("Reading ELF file: {}", filename);
-        
-        // Read file data
-        let file_data = std::fs::read(filename)
-            .map_err(|e| AvrStackError::new(ErrorCode::InvalidElf, file!(), line!(), &format!("Failed to read file {}: {}", filename, e)))?;
-        
-        if file_data.is_empty() {
-            println!("ERROR: Input file is empty!");
-            return Err(AvrStackError::new(ErrorCode::InvalidElf, file!(), line!(), "Input file is empty"));
-        }
-        
-        // Parse ELF file
-        let mut elf_info = crate::elf::ElfInfo::new();
-        if let Ok(_) = elf_info.parse_elf(&file_data) {
-            // Fix: Get a copy of any text section before it gets moved
-            let mut found_program_data = false;
-            
-            // First try to get the .text section
-            if let Some(section) = elf_info.get_text_section() {
-                if !section.data.is_empty() {
-                    let section_data = section.data.clone();
-                    let data_len = section_data.len();
-                    println!("Found .text section with {} bytes - loading for analysis", data_len);
-                    
-                    // Load the section data directly
-                    self.cpu.prog = section_data;
-                    self.cpu.prog_size = data_len as u32;
-                    found_program_data = true;
-                }
-            }
-            
-            // If no .text section, try looking for any section with code data
-            if !found_program_data {
-                for (name, section) in &elf_info.sections {
-                    if (name.contains("text") || name.contains("code")) && !section.data.is_empty() {
-                        let section_data = section.data.clone();
-                        let data_len = section_data.len();
-                        println!("Found '{}' section with {} bytes - loading for analysis", name, data_len);
-                        
-                        // Load the section data directly
-                        self.cpu.prog = section_data;
-                        self.cpu.prog_size = data_len as u32;
-                        found_program_data = true;
-                        break;
-                    }
-                }
-            }
-            
-            // Verify data was loaded
-            if !found_program_data || self.cpu.prog.is_empty() {
-                println!("WARNING: No valid program data found. Will use synthetic data.");
-            } else {
-                println!("Successfully loaded {} bytes of program data", self.cpu.prog.len());
-            }
-            
-            // Store ELF info in CPU
-            self.cpu.elf_info = Some(elf_info);
-        }
-        
         Ok(())
     }
 
@@ -926,10 +722,6 @@ impl AvrStack {
         self.args.json_output = true;
         
         // Note: We intentionally don't set any compact_json field since we don't know its name
-    }
-    
-    pub fn set_call_graph(&mut self, call_graph: bool) {
-        self.args.call_graph = call_graph;
     }
     
     // Add memory report functionality
@@ -1033,6 +825,69 @@ impl AvrStack {
         Ok(())
     }
 
+    pub fn load_elf(&mut self, filename: &str) -> Result<()> {
+        println!("Reading ELF file: {}", filename);
+        
+        // Read file data
+        let file_data = std::fs::read(filename)
+            .map_err(|e| AvrStackError::new(ErrorCode::InvalidElf, file!(), line!(), &format!("Failed to read file {}: {}", filename, e)))?;
+        
+        if file_data.is_empty() {
+            println!("ERROR: Input file is empty!");
+            return Err(AvrStackError::new(ErrorCode::InvalidElf, file!(), line!(), "Input file is empty"));
+        }
+        
+        // Parse ELF file
+        let mut elf_info = crate::elf::ElfInfo::new();
+        if let Ok(_) = elf_info.parse_elf(&file_data) {
+            // Fix: Get a copy of any text section before it gets moved
+            let mut found_program_data = false;
+            
+            // First try to get the .text section
+            if let Some(section) = elf_info.get_text_section() {
+                if !section.data.is_empty() {
+                    let section_data = section.data.clone();
+                    let data_len = section_data.len();
+                    println!("Found .text section with {} bytes - loading for analysis", data_len);
+                    
+                    // Load the section data directly
+                    self.cpu.prog = section_data;
+                    self.cpu.prog_size = data_len as u32;
+                    found_program_data = true;
+                }
+            }
+            
+            // If no .text section, try looking for any section with code data
+            if !found_program_data {
+                for (name, section) in &elf_info.sections {
+                    if (name.contains("text") || name.contains("code")) && !section.data.is_empty() {
+                        let section_data = section.data.clone();
+                        let data_len = section.data.len();
+                        println!("Found '{}' section with {} bytes - loading for analysis", name, data_len);
+                        
+                        // Load the section data directly
+                        self.cpu.prog = section_data;
+                        self.cpu.prog_size = data_len as u32;
+                        found_program_data = true;
+                        break;
+                    }
+                }
+            }
+            
+            // Verify data was loaded
+            if !found_program_data || self.cpu.prog.is_empty() {
+                println!("WARNING: No valid program data found. Will use synthetic data.");
+            } else {
+                println!("Successfully loaded {} bytes of program data", self.cpu.prog.len());
+            }
+            
+            // Store ELF info in CPU
+            self.cpu.elf_info = Some(elf_info);
+        }
+        
+        Ok(())
+    }
+
     // Add this diagnostic function to print out the available fields
     fn debug_program_args_fields(&self) {
         println!("Available ProgramArgs fields:");
@@ -1042,5 +897,18 @@ impl AvrStack {
         println!("- json_output: {}", self.args.json_output);
         // Add any other fields you know exist
         // This will help identify what fields are actually available
+    }
+}
+
+// Helper function to shorten function names for better graph readability
+fn shorten_function_name(name: &str) -> String {
+    // Remove common C++ prefixes and namespace parts
+    let name = name.replace("_ZN", "");
+    
+    // If we have a long function name, truncate it
+    if name.len() > 25 {
+        format!("{}...", &name[0..22])
+    } else {
+        name.to_string()
     }
 }

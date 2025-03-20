@@ -89,8 +89,6 @@ Author: Gary Scott (Dazed_N_Confused)
   - Maximum call chain depths
   - Interrupt stack requirements
   - Memory utilization statistics
-  - **IMPROVED: Call graph visualization with --call-graph option**
-  - **NEW: Color-coded call graphs based on stack usage intensity**
 
 ## Requirements
 
@@ -135,7 +133,6 @@ avr_stack [OPTIONS] <INPUT_FILE>
 - `--memory-report` - Show memory statistics and RAM usage estimates
 - `--json` - Output in JSON format
 - `--json-compact` - Output compact JSON format
-- `--call-graph` - Generate DOT file for call graph visualization
 - `--verbose` - Show detailed warnings and analysis messages (disabled by default)
 - `--quiet` - Suppress non-essential output
 
@@ -276,7 +273,6 @@ Current version: 1.7
 - Enhanced memory reporting for all supported AVR devices
 - Improved interrupt vector handling for modern AVR architectures
 - Added RAM size detection and tracking
-- Fixed call graph visualization support
 - Improved JSON output formatting
 - Enhanced memory usage recommendations
 - **NEW: Suppressed excessive warning messages by default**

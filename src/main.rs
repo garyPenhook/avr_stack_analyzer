@@ -56,9 +56,6 @@ fn main() {
         .arg(Arg::with_name("json-compact")
             .long("json-compact")
             .help("Output compact JSON format"))
-        .arg(Arg::with_name("call-graph")
-            .long("call-graph")
-            .help("Generate DOT file for call graph visualization"))
         .arg(Arg::with_name("verbose")
             .long("verbose")
             .help("Show detailed warnings and analysis messages"))
@@ -113,10 +110,6 @@ fn main() {
         
         if matches.is_present("json-compact") {
             app.app.set_compact_json(true);
-        }
-        
-        if matches.is_present("call-graph") {
-            app.app.set_call_graph(true);
         }
         
         if let Some(format_val) = matches.value_of("format") {
@@ -232,13 +225,6 @@ impl AvrStackAnalyzer {
         if self.app.args.json_output {
             if let Some(filename) = &self.app.args.filename {
                 println!("\nDetailed results saved to {}.json", filename);
-            }
-        }
-        
-        if self.app.args.call_graph {
-            if let Some(filename) = &self.app.args.filename {
-                println!("Call graph saved to {}.dot", filename);
-                println!("To visualize: dot -Tpng {}.dot -o {}.png", filename, filename);
             }
         }
         
