@@ -19,7 +19,7 @@ use avr_stack::{AvrStack, ErrorCode};
 use serde_json::{json, to_string_pretty};
 
 fn main() {
-    // Just double-checking our data types work as expected...
+    //  double-checking data types work as expected...
     // (not taking any chances with cross-platform issues)
     assert_eq!(std::mem::size_of::<u32>(), 4);
     assert_eq!(std::mem::size_of::<i32>(), 4);

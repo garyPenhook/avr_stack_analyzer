@@ -189,7 +189,7 @@ Contributions are welcome! Please feel free to submit a Pull Request. When contr
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the [GPL-3.0](LICENSE).
 
 ## Version History
 
