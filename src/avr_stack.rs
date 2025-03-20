@@ -142,7 +142,8 @@ pub struct ProgramArgs {
     pub total_only: bool,
     pub memory_report: bool,
     pub json_output: bool,
-    pub json_pretty: bool,  // New option for pretty JSON
+    pub json_pretty: bool,  // Option for pretty JSON
+    pub call_graph: bool,   // Adding call graph option
     pub icall_list: Vec<MainICall>,
 }
 
@@ -160,6 +161,7 @@ impl Default for ProgramArgs {
             memory_report: false,
             json_output: false,
             json_pretty: true,  // Default to pretty-printing JSON for terminal readability
+            call_graph: false,  // Off by default
             icall_list: Vec::new(),
         }
     }
@@ -320,11 +322,11 @@ impl JsonWriter {
 // ******************************************************************************
 // * ARCHITECTURE MODULE
 // ******************************************************************************
-
 #[derive(Debug)]
 pub struct ArchInfo {
     pub num_isrs: u32,
     pub isr: Vec<String>,
+    pub ram_size: u32,   // Adding RAM size field
     // More architecture-specific fields would be here
 }
 
@@ -333,6 +335,7 @@ impl ArchInfo {
         ArchInfo {
             num_isrs: 0,
             isr: Vec::new(),
+            ram_size: 2 * 1024,  // 2KB RAM (typical for many AVRs)
         }
     }
     
@@ -341,7 +344,7 @@ impl ArchInfo {
         // This would identify compiler-specific code patterns
         Ok(())
     }
-    
+
     pub fn guess_num_interrupt_vectors(&mut self) -> Result<()> {
         // Implementation for determining the number of interrupt vectors
         Ok(())
@@ -351,7 +354,6 @@ impl ArchInfo {
 // ******************************************************************************
 // * MAIN APPLICATION
 // ******************************************************************************
-
 #[derive(Debug, Serialize, Clone)]
 pub struct StackAnalysisResult {
     pub function_name: String,
@@ -473,7 +475,7 @@ impl AvrStack {
         self.args.json_pretty = !matches.contains_id("json-compact");
         
         // Parse icall arguments (for specific icall handling)
-        // This would involve parsing arguments like -ignoreICall=func+0x## and -iCall=func+0x##:dest
+        // This would involve parsing arguments like -ignoreICall=func+0x## and -iCall=func+0x##:dests
         
         Ok(())
     }
