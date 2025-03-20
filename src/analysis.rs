@@ -167,9 +167,9 @@ impl MazeAnalysis {
         Ok(())
     }
     
-    // Change to mutable reference to allow modifying function_sizes
     fn identify_function_entry_points(&mut self, cpu: &Cpu) -> Result<Vec<CpuAddr>> {
         let mut entry_points = Vec::new();
+        
         
         // First, get entry points from ELF symbols if available
         if let Some(ref elf_info) = cpu.elf_info {

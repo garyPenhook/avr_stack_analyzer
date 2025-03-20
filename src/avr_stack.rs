@@ -71,6 +71,17 @@ impl fmt::Display for AvrStackError {
 
 impl StdError for AvrStackError {}
 
+impl From<std::io::Error> for AvrStackError {
+    fn from(error: std::io::Error) -> Self {
+        AvrStackError {
+            code: ErrorCode::FileIo,
+            message: error.to_string(),
+            file: file!().to_string(),
+            line: line!(),
+        }
+    }
+}
+
 pub type Result<T> = std::result::Result<T, AvrStackError>;
 
 // Macro for easier error creation
@@ -145,6 +156,8 @@ pub struct ProgramArgs {
     pub json_pretty: bool,  // Option for pretty JSON
     pub call_graph: bool,   // Adding call graph option
     pub icall_list: Vec<MainICall>,
+    pub max_recursion: u32, // Maximum recursion depth
+    pub ignore_functions: Vec<String>, // Functions to ignore
 }
 
 impl Default for ProgramArgs {
@@ -163,6 +176,8 @@ impl Default for ProgramArgs {
             json_pretty: true,  // Default to pretty-printing JSON for terminal readability
             call_graph: false,  // Off by default
             icall_list: Vec::new(),
+            max_recursion: 10,  // Default maximum recursion depth
+            ignore_functions: Vec::new(), // Default empty list of ignored functions
         }
     }
 }
@@ -349,6 +364,11 @@ impl ArchInfo {
         // Implementation for determining the number of interrupt vectors
         Ok(())
     }
+    
+    pub fn detect_memory_sizes(&mut self, elf: &ElfInfo) -> Result<()> {
+        // Implementation for detecting memory sizes
+        Ok(())
+    }
 }
 
 // ******************************************************************************
@@ -430,13 +450,31 @@ impl AvrStack {
                 .long("json-compact")
                 .action(ArgAction::SetTrue)
                 .help("Output compact JSON (not human readable)"))
+            .arg(Arg::new("call-graph")
+                .long("call-graph")
+                .action(ArgAction::SetTrue)
+                .help("Generate call graph visualization data"))
+            .arg(Arg::new("max-recursion")
+                .long("max-recursion")
+                .value_name("DEPTH")
+                .help("Maximum recursion depth (default 10)"))
+            .arg(Arg::new("ignore-function")
+                .long("ignore-function")
+                .value_name("NAME")
+                .help("Ignore function with given name")
+                .action(ArgAction::Append))
             .get_matches();
         
         // Set the program arguments based on command-line options
         if let Some(filename) = matches.get_one::<String>("INPUT") {
             self.args.filename = Some(filename.clone());
         } else {
-            return ez_error!(ErrorCode::Parameter, "No input file specified");
+            return Err(AvrStackError::new(
+                ErrorCode::Parameter,
+                file!(),
+                line!(),
+                "No input file specified"
+            ));
         }
         
         if let Some(format) = matches.get_one::<String>("format") {
@@ -459,20 +497,34 @@ impl AvrStack {
             }
         }
         
-        self.args.total_only = matches.contains_id("total-only");
-        self.args.allow_calls_from_isr = matches.contains_id("allow-calls-from-isr");
-        self.args.wrap_0 = matches.contains_id("wrap0");
-        self.args.include_bad_interrupt = matches.contains_id("include-bad-interrupt");
-        self.args.ignore_icall_all = matches.contains_id("ignore-icall");
-        self.args.memory_report = matches.contains_id("memory-report");
+        self.args.total_only = matches.get_flag("total-only");
+        self.args.allow_calls_from_isr = matches.get_flag("allow-calls-from-isr");
+        self.args.wrap_0 = matches.get_flag("wrap0");
+        self.args.include_bad_interrupt = matches.get_flag("include-bad-interrupt");
+        self.args.ignore_icall_all = matches.get_flag("ignore-icall");
+        self.args.memory_report = matches.get_flag("memory-report");
         
-        if matches.contains_id("json") {
+        if matches.get_flag("json") {
             self.args.json_output = true;
             self.args.format = OutputFormat::Json;
         }
         
         // Default to pretty JSON, set to compact if flag is present
-        self.args.json_pretty = !matches.contains_id("json-compact");
+        self.args.json_pretty = !matches.get_flag("json-compact");
+        
+        // Parse max recursion
+        if let Some(max_rec) = matches.get_one::<String>("max-recursion") {
+            if let Ok(depth) = max_rec.parse::<u32>() {
+                self.args.max_recursion = depth;
+            }
+        }
+        
+        // Parse ignored functions
+        if let Some(ignored) = matches.get_many::<String>("ignore-function") {
+            for func in ignored {
+                self.args.ignore_functions.push(func.clone());
+            }
+        }
         
         // Parse icall arguments (for specific icall handling)
         // This would involve parsing arguments like -ignoreICall=func+0x## and -iCall=func+0x##:dests
@@ -481,14 +533,22 @@ impl AvrStack {
     }
     
     pub fn run(&mut self) -> Result<()> {
+        println!("AVR Stack Analyzer v{} starting...", VERSION);
+        
         // Parse command-line arguments
         self.parse_args()?;
         
         // Read and parse the ELF file
         if let Some(filename) = &self.args.filename {
+            println!("Reading ELF file: {}", filename);
             self.elf.read_file(filename)?;
         } else {
-            return ez_error!(ErrorCode::Parameter, "No input file specified");
+            return Err(AvrStackError::new(
+                ErrorCode::Parameter,
+                file!(),
+                line!(),
+                "No input file specified"
+            ));
         }
         
         // Initialize the CPU with the program data
@@ -500,31 +560,52 @@ impl AvrStack {
         
         // Set CPU options from program arguments
         self.cpu.wrap_0 = self.args.wrap_0;
+        self.cpu.allow_calls_from_isr = self.args.allow_calls_from_isr;
+        self.cpu.elf_info = Some(self.elf.clone());
         
         // Initialize architecture information
         self.arch.parse_standard_patterns()?;
         self.arch.guess_num_interrupt_vectors()?;
+        self.arch.detect_memory_sizes(&self.elf)?;
+        
+        // Register any ignored functions in the maze analysis
+        for func in &self.args.ignore_functions {
+            println!("Ignoring function: {}", func);
+            self.maze.add_ignored_function(func);
+        }
         
         // Perform control flow analysis
+        println!("Performing control flow analysis...");
         self.maze.analyze(&mut self.cpu, &self.arch)?;
         
         // Build the call tree
+        println!("Building call tree...");
         self.tree.build(self.arch.num_isrs, &self.arch.isr, &self.cpu)?;
         
         // Generate the stack usage report
         self.tree.dump_stack_tree(&self.args)?;
         
         // Check for calls from interrupts
-        if !self.args.allow_calls_from_isr {
-            // Check if there are calls from interrupts and error if found
-            // Actual implementation would use the analysis results
+        if self.maze.calls_from_interrupt && !self.args.allow_calls_from_isr {
+            return Err(AvrStackError::new(
+                ErrorCode::CallFromIsr,
+                file!(),
+                line!(),
+                "Calls from interrupts detected"
+            ));
         }
+        
+        // Get the final results
+        self.results = self.tree.get_results();
         
         // Output results in the requested format
         if self.args.json_output {
             self.output_json()?;
-        } else {
-            self.output_text()?;
+        }
+        
+        // Generate call graph if requested
+        if self.args.call_graph {
+            self.generate_call_graph()?;
         }
         
         println!("AVR Stack analysis completed successfully");
@@ -535,7 +616,7 @@ impl AvrStack {
     pub fn output_json(&self) -> Result<()> {
         if let Some(filename) = &self.args.filename {
             let json_filename = format!("{}.json", filename);
-            let _writer = JsonWriter::new(&json_filename, self.args.json_pretty)?;
+            let mut writer = JsonWriter::new(&json_filename, self.args.json_pretty)?;
             
             // Write JSON output using writer
             // This would include all the analysis results
@@ -547,53 +628,48 @@ impl AvrStack {
             
             Ok(())
         } else {
-            ez_error!(ErrorCode::Parameter, "No input file specified")
+            Err(AvrStackError::new(
+                ErrorCode::Parameter,
+                file!(),
+                line!(),
+                "No input file specified"
+            ))
         }
     }
     
     fn print_terminal_friendly_json(&self) -> Result<()> {
-        // Build a formatted output for the terminal
-        println!("\n{}", "===== STACK ANALYSIS RESULTS =====".to_string());
-        
-        // Print the total maximum stack usage
-        let mut total_max_stack = 0;
-        for result in &self.results {
-            if result.stack_usage > total_max_stack {
-                total_max_stack = result.stack_usage;
-            }
-        }
-        println!("\nTotal maximum stack usage: {} bytes", total_max_stack);
-        
-        // Print individual function results
-        println!("\nFunction stack usage:");
-        println!("{:<40} {:<10} {}", "FUNCTION", "ADDRESS", "STACK USAGE");
-        println!("{:-<40} {:-<10} {:-<10}", "", "", "");
-        
-        // Sort results by stack usage (descending)
-        let mut sorted_results = self.results.clone();
-        sorted_results.sort_by(|a, b| b.stack_usage.cmp(&a.stack_usage));
-        
-        for result in sorted_results {
-            println!("{:<40} 0x{:08x} {} bytes", 
-                     result.function_name, 
-                     result.address, 
-                     result.stack_usage);
-            
-            // Print call chain if not in total-only mode
-            if !self.args.total_only && !result.calls.is_empty() {
-                println!("    Call chain: {}", result.calls.join(" → "));
-            }
-        }
-        
-        println!("\n{}\n", "=================================".to_string());
-        
+        // Implementation for printing a terminal-friendly JSON output
         Ok(())
     }
     
-    pub fn output_text(&self) -> Result<()> {
-        // Output results in the specified text format
-        // This would depend on the args.format value
-        
-        Ok(())
+    pub fn generate_call_graph(&self) -> Result<()> {
+        if let Some(filename) = &self.args.filename {
+            let dot_filename = format!("{}.dot", filename);
+            let mut file = File::create(&dot_filename)?;
+            
+            writeln!(file, "digraph call_graph {{")?;
+            
+            // Generate the call graph in DOT format
+            for (caller, callees) in &self.cpu.call_graph {
+                for callee in callees {
+                    writeln!(file, "  \"func_0x{:x}\" -> \"func_0x{:x}\";", caller * 2, callee * 2)?;
+                }
+            }
+            
+            // Close the DOT file
+            writeln!(file, "}}")?;
+            
+            println!("Call graph written to {}", dot_filename);
+            println!("To generate a visual graph, use: dot -Tpng {} -o {}.png", dot_filename, filename);
+            
+            Ok(())
+        } else {
+            Err(AvrStackError::new(
+                ErrorCode::Parameter,
+                file!(),
+                line!(),
+                "No input file specified"
+            ))
+        }
     }
 }

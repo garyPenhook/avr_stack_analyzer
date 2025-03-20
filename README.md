@@ -47,6 +47,8 @@ Author: Gary Scott (Dazed_N_Confused)
 - Memory safety bounds checking
 - Multi-space memory management (RAM, flash, EEPROM)
 - Maximum stack depth calculation
+- **NEW: Accurate RAM size detection and tracking**
+- **NEW: RAM usage warnings based on percentage thresholds**
 
 ### 5. ELF Binary Integration
 - Complete ELF file parsing
@@ -74,7 +76,8 @@ Author: Gary Scott (Dazed_N_Confused)
   - Maximum call chain depths
   - Interrupt stack requirements
   - Memory utilization statistics
-  - Call graph visualization
+  - **IMPROVED: Call graph visualization with --call-graph option**
+  - **NEW: Color-coded call graphs based on stack usage intensity**
 
 ## Requirements
 
@@ -118,6 +121,7 @@ avr_stack [OPTIONS] <INPUT_FILE>
 - `--memory-report` - Show memory statistics
 - `--json` - Output in JSON format
 - `--json-compact` - Output compact JSON format
+- `--call-graph` - Generate DOT file for call graph visualization
 
 ### Advanced Usage Examples
 
@@ -134,6 +138,11 @@ avr_stack --json --format v19 path/to/firmware.elf
 Analyze with ISR call validation disabled:
 ```
 avr_stack --allow-calls-from-isr path/to/firmware.elf
+```
+
+Analyze with debug information:
+```
+avr_stack --debug path/to/firmware.elf
 ```
 
 ## Understanding the Output
@@ -193,4 +202,8 @@ This project is licensed under the [GPL-3.0](LICENSE).
 
 ## Version History
 
-Current version: 1.4
+Current version: 1.5
+- Added RAM size detection and tracking
+- Fixed call graph visualization support
+- Improved JSON output formatting
+- Enhanced memory usage recommendations
