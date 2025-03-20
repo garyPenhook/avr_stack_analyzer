@@ -48,6 +48,23 @@ The tool performs:
 
 3. The compiled binary will be available at `target/release/avr_stack`
 
+## Development Notes
+
+- The project compiles with numerous "unused code" warnings. This is normal during development as not all parts of the API are fully utilized yet.
+- If you encounter build errors, check the Troubleshooting section below.
+
+## Troubleshooting
+
+If you encounter compilation errors:
+
+1. Make sure you have the latest stable Rust toolchain installed
+2. Try cleaning the build and rebuilding:
+   ```
+   cargo clean
+   cargo build --release
+   ```
+3. Check for specific error messages that might indicate issues with your system configuration
+
 ## Usage
 
 Basic usage:
