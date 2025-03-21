@@ -8,6 +8,8 @@ use object::{Object, ObjectSection, ObjectSymbol};
 
 use crate::avr_stack::{Result, ErrorCode, AvrStackError};
 
+// Allow unused struct fields and functions that are part of the public API
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct Symbol {
     pub name: String,
@@ -16,6 +18,7 @@ pub struct Symbol {
     pub section_index: u16,
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct Section {
     pub name: String,
@@ -30,6 +33,7 @@ pub struct ElfInfo {
     pub prog_size: u32,
     pub ram_start: u32,
     pub symbols: Vec<Symbol>,
+    #[allow(dead_code)]
     pub symbol_map: HashMap<String, u32>, // Maps symbol names to their address
     pub address_map: HashMap<u32, String>, // Maps addresses to symbol names
     pub sections: HashMap<String, Section>,
@@ -188,7 +192,7 @@ impl ElfInfo {
         
         println!("Found {} total sections", section_count);
         
-        // Handle case with no text section
+        // Handle case with no text section - remove unnecessary parentheses
         if !has_text_section || !has_program_data {
             println!("WARNING: No valid program data found in the ELF file");
             
@@ -238,6 +242,7 @@ impl ElfInfo {
         self.ram_start
     }
     
+    #[allow(dead_code)]
     pub fn get_symbol_address(&self, name: &str) -> Option<u32> {
         self.symbol_map.get(name).copied()
     }
@@ -255,6 +260,7 @@ impl ElfInfo {
         None
     }
 
+    #[allow(dead_code)]
     pub fn parse_hex(&mut self, data: &[u8]) -> Result<()> {
         // Convert the hex data to a string
         let hex_str = std::str::from_utf8(data)
@@ -318,15 +324,18 @@ impl ElfInfo {
     }
 }
 
+#[allow(dead_code)]
 // Helper function to read a u32 in little-endian format
 fn read_u32(data: &[u8]) -> u32 {
     ((data[3] as u32) << 24) | ((data[2] as u32) << 16) | ((data[1] as u32) << 8) | (data[0] as u32)
 }
 
+#[allow(dead_code)]
 // Helper function to read a u16 in little-endian format
 fn read_u16(data: &[u8]) -> u16 {
     ((data[1] as u16) << 8) | (data[0] as u16)
 }
 
 // Alias for compatibility with analysis module
+#[allow(dead_code)]
 pub type ELFFile = ElfInfo;

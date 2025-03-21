@@ -4,7 +4,7 @@ use std::io::{self, Write};
 use serde_json::{Value, to_value};
 use serde::Serialize;
 
-/// Function to pretty-print JSON data to the terminal
+#[allow(dead_code)]
 pub fn pretty_print_json<T: Serialize>(data: &T) -> io::Result<()> {
     let stdout = io::stdout();
     let mut handle = stdout.lock();
@@ -16,6 +16,7 @@ pub fn pretty_print_json<T: Serialize>(data: &T) -> io::Result<()> {
     Ok(())
 }
 
+#[allow(dead_code)]
 fn print_json_value<W: Write>(writer: &mut W, value: &Value, indent: usize) -> io::Result<()> {
     let indent_str = "    ".repeat(indent);
     

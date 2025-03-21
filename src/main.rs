@@ -4,8 +4,11 @@
 // Enhanced for comprehensive stack usage analysis
 // 
 
+#[allow(unused_imports)]
 use std::io;
+#[allow(unused_imports)]
 use std::fs::File;
+#[allow(unused_imports)]
 use std::path::Path;
 use std::time::Instant;
 use std::process;

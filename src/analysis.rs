@@ -251,10 +251,12 @@ impl PatternMatcher {
 }
 
 // Add an alias for Cpu to make the existing code work
+#[allow(dead_code)]
 pub type AVRProcessor = Cpu;
 
 // CallChain for tracking stack usage paths
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct CallChain {
     pub path: Vec<CpuAddr>,
     pub stack_usage: u32,
@@ -283,6 +285,7 @@ impl PartialOrd for PathNode {
 }
 
 // MazeAnalysis for control flow analysis
+#[allow(dead_code)]
 pub struct MazeAnalysis {
     pub visited_addresses: HashSet<CpuAddr>,
     pub stack_changes: HashMap<CpuAddr, i32>,
@@ -644,6 +647,7 @@ impl MazeAnalysis {
 }
 
 // TreeAnalysis for call tree and stack usage analysis
+#[allow(dead_code)]
 pub struct TreeAnalysis {
     pub function_stack_usage: HashMap<CpuAddr, u32>,
     pub call_graph: HashMap<CpuAddr, Vec<CpuAddr>>,
@@ -920,11 +924,13 @@ impl TreeAnalysis {
         self.analyzer_result.clone()
     }
     
+    #[allow(unused)]
     pub fn get_call_chain(&self, addr: CpuAddr) -> Option<&CallChain> {
         self.call_chains.get(&addr)
     }
 }
 
+#[allow(dead_code)]
 pub struct AnalysisResult {
     pub max_stack: usize,
     pub call_depth: usize,
@@ -932,11 +938,13 @@ pub struct AnalysisResult {
     pub max_stack_path: Vec<String>,
 }
 
+#[allow(dead_code)]
 pub struct FunctionStackUsage {
     pub name: String,
     pub stack_bytes: usize,
 }
 
+#[allow(dead_code)]
 pub fn analyze_stack_usage(elf_file: &ElfInfo, processor: &AVRProcessor) -> AnalysisResult {
     let mut max_stack = 0;
     let call_depth = 5; // Fixed call depth (placeholder)

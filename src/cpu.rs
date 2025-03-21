@@ -15,11 +15,15 @@ pub const CPU_F_RET: u32 = 0x040;
 pub const CPU_F_INSTR: u32 = 0x080;
 pub const CPU_F_IJMP: u32 = 0x100;
 pub const CPU_F_RETI: u32 = 0x200;
+#[allow(dead_code)]
 pub const CPU_F_LONGJMP: u32 = 0x400;
+#[allow(dead_code)]
 pub const CPU_F_UNKNOWN_DEST: u32 = 0x800;
+#[allow(dead_code)]
 pub const CPU_F_ISR: u32 = 0x1000;
 pub const CPU_F_SKIP: u32 = 0x2000;
 
+#[allow(dead_code)]
 pub const CPU_FF_FLOW: u32 = CPU_F_RET | CPU_F_CALL | CPU_F_IJMP | CPU_F_COND_JUMP | CPU_F_UNCOND_JUMP;
 pub const CPU_MIN_INSTR_SIZE: u32 = 2;
 
@@ -37,6 +41,7 @@ pub struct CpuICallListEntry {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct IjmpInfo {
     pub table_size: u32,
     pub data_size: u32,
@@ -60,6 +65,7 @@ impl fmt::Display for AvrInstruction {
 
 // Status register (SREG) flags for AVR
 #[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
 pub struct StatusRegister {
     pub carry: bool,      // C flag
     pub zero: bool,       // Z flag
@@ -71,6 +77,7 @@ pub struct StatusRegister {
     pub interrupt: bool,  // I flag
 }
 
+#[allow(dead_code)]
 impl StatusRegister {
     pub fn new() -> Self {
         StatusRegister {
@@ -112,6 +119,7 @@ impl StatusRegister {
 
 // Execution path for analysis
 #[derive(Clone)]
+#[allow(dead_code)]
 struct ExecutionPath {
     addr: CpuAddr,
     stack_depth: i32,
@@ -121,6 +129,7 @@ struct ExecutionPath {
 }
 
 // A struct to represent the AVR CPU for simulation
+#[allow(dead_code)]
 pub struct Cpu {
     pub instruction_set: Vec<AvrInstruction>,
     pub pc: CpuAddr,
@@ -465,6 +474,7 @@ impl Cpu {
         ((self.prog[offset + 1] as u16) << 8) | (self.prog[offset] as u16)
     }
     
+    #[allow(unused)]
     pub fn process_instruction(&mut self, addr: CpuAddr) -> Result<()> {
         // Check bounds
         if addr * CPU_MIN_INSTR_SIZE >= self.prog_size {
@@ -1010,7 +1020,7 @@ impl Cpu {
         }
     }
     
-    // Get symbol name for an address
+    #[allow(unused)]
     pub fn get_symbol_name(&self, addr: CpuAddr) -> Option<String> {
         if let Some(ref elf_info) = self.elf_info {
             if let Some(name) = elf_info.get_symbol_name(addr) {
@@ -1065,6 +1075,7 @@ impl Cpu {
         targets
     }
 
+    #[allow(unused)]
     pub fn load_program(&mut self, data: &[u8]) {
         // Store the program data and verify it
         if data.is_empty() {
@@ -1093,6 +1104,7 @@ impl Cpu {
         }
     }
     
+    #[allow(unused)]
     fn verify_program_data(&self) -> usize {
         // Count how many valid-looking AVR instructions we can find
         let mut valid_count = 0;
@@ -1172,7 +1184,7 @@ impl Cpu {
         valid_count
     }
 
-    // Update the detect_architecture method to recognize modern AVRs
+    #[allow(unused)]
     fn detect_architecture(&mut self) -> Result<String> {
         // Try to determine the architecture from ELF info or program data
         
@@ -1208,13 +1220,13 @@ impl Cpu {
         Ok("classic_avr".to_string())
     }
 
-    // Update the ISR handling for modern AVR architectures
+    #[allow(unused)]
     fn handle_interrupts(&mut self) -> Result<()> {
         // First detect if we're dealing with a modern AVR
         let arch = self.detect_architecture()?;
         
         // Different interrupt vector handling based on architecture
-        if arch == "modern_avr" {
+        if (arch == "modern_avr") {
             // Modern AVRs have different interrupt vector table formats
             // They have a "reset" vector at address 0, then a jump table
             
@@ -1242,7 +1254,7 @@ impl Cpu {
         Ok(())
     }
 
-    // Ensure we properly collect call information during function analysis
+    #[allow(unused)]
     fn analyze_function_stack_internal(&mut self, _addr: CpuAddr, _is_isr: bool) -> Result<u32> {
         // ...existing code...
         

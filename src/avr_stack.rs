@@ -19,6 +19,7 @@ const VERSION: &str = "37";  // Updated for Rust version
 // * ERROR HANDLING
 // ******************************************************************************
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ErrorCode {
     None = 0,
@@ -105,6 +106,7 @@ macro_rules! ez_error {
 }
 
 // Helper function to get error message from code
+#[allow(dead_code)]
 pub fn error_message(code: ErrorCode) -> &'static str {
     match code {
         ErrorCode::None => "No error",
@@ -136,7 +138,8 @@ pub enum OutputFormat {
     Json = 100,
 }
 
-#[derive(Debug)]
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
 pub struct MainICall {
     pub src_offset: u32,
     pub dst_count: u32,
@@ -144,43 +147,64 @@ pub struct MainICall {
     pub dst: Vec<String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ProgramArgs {
-    pub format: OutputFormat,
-    pub filename: Option<String>,
-    pub allow_calls_from_isr: bool,
+    pub input_file: String,
+    pub mcu: String,
     pub mcu_specified: bool,
-    pub wrap_0: bool,
-    pub include_bad_interrupt: bool,
-    pub ignore_icall_all: bool,
-    pub total_only: bool,
-    pub memory_report: bool,
+    pub allow_calls_from_isr: bool,
+    pub num_isrs: u32,
+    pub mcu_ram_size: u32,
+    pub stack_size: u32,
+    pub wrap_at_addr0: bool,
     pub json_output: bool,
-    pub json_pretty: bool,  // Option for pretty JSON
     pub call_graph: bool,   // Adding call graph option
     pub icall_list: Vec<MainICall>,
-    pub max_recursion: u32, // Maximum recursion depth
-    pub ignore_functions: Vec<String>, // Functions to ignore
-    pub verbose: bool,  // Add this field for controlling output verbosity
-    pub quiet: bool,    // Add this field for controlling quiet mode
+    pub total_only: bool,
+    pub minimal_output: bool,
+    pub verbose_output: bool,
+    
+    // Adding missing fields that are being accessed in the code
+    pub format: OutputFormat,
+    pub filename: Option<String>,
+    pub wrap_0: bool,        // Different from wrap_at_addr0 - match existing field names
+    pub include_bad_interrupt: bool,
+    pub ignore_icall_all: bool,
+    pub memory_report: bool,
+    pub json_pretty: bool,
+    pub max_recursion: u32,
+    pub ignore_functions: Vec<String>,
+    pub verbose: bool,
+    pub quiet: bool,
 }
 
 impl Default for ProgramArgs {
     fn default() -> Self {
         ProgramArgs {
+            input_file: String::new(),
+            mcu: String::new(),
+            mcu_specified: false,
+            allow_calls_from_isr: false,
+            num_isrs: 0,
+            mcu_ram_size: 0,
+            stack_size: 0,
+            wrap_at_addr0: false,
+            json_output: false,
+            call_graph: false,
+            icall_list: Vec::new(),
+            total_only: false,
+            minimal_output: false,
+            verbose_output: false,
+            
+            // Initialize the new fields
             format: OutputFormat::Default,
             filename: None,
-            allow_calls_from_isr: false,
-            mcu_specified: false,
             wrap_0: false,
             include_bad_interrupt: false,
             ignore_icall_all: false,
-            total_only: false,
             memory_report: false,
-            json_output: false,
             json_pretty: true,  // Default to pretty-printing JSON for terminal readability
-            call_graph: false,  // Off by default
-            icall_list: Vec::new(),
             max_recursion: 10,  // Default maximum recursion depth
             ignore_functions: Vec::new(), // Default empty list of ignored functions
             verbose: false,  // Default to false
@@ -192,6 +216,7 @@ impl Default for ProgramArgs {
 // ******************************************************************************
 // * JSON OUTPUT
 // ******************************************************************************
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct JsonWriter {
     file: File,
@@ -201,6 +226,7 @@ pub struct JsonWriter {
     pretty_print: bool,
 }
 
+#[allow(dead_code)]
 impl JsonWriter {
     pub fn new(filename: &str, pretty: bool) -> Result<Self> {
         let file = File::create(filename)
@@ -657,6 +683,7 @@ impl AvrStack {
         self.args.quiet = quiet;
     }
     
+    #[allow(unused)]
     pub fn generate_terminal_summary(&self) -> Result<()> {
         // Skip if quiet mode
         if self.args.quiet {
@@ -825,6 +852,7 @@ impl AvrStack {
         Ok(())
     }
 
+    #[allow(unused)]
     pub fn load_elf(&mut self, filename: &str) -> Result<()> {
         println!("Reading ELF file: {}", filename);
         
@@ -901,6 +929,7 @@ impl AvrStack {
 }
 
 // Helper function to shorten function names for better graph readability
+#[allow(unused)]
 fn shorten_function_name(name: &str) -> String {
     // Remove common C++ prefixes and namespace parts
     let name = name.replace("_ZN", "");
