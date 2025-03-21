@@ -48,6 +48,57 @@ impl PatternMatcher {
             vec![0xFF, 0xFF],
         ));
         
+        // AVR DA/DB/DD series patterns (newer AVR MCUs)
+        
+        // AVR DA/DB series with extended address space - 24-bit call/ret pattern
+        patterns.push((
+            "avr_da_db_extended_call".to_string(),
+            vec![0xDF, 0x93, 0xCF, 0x93, 0xCD, 0xB7, 0xDE, 0xB7, 0xED, 0xB7],  // Extended push pattern with EIND
+            vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF],
+        ));
+        
+        // AVR DA/DB optimized prologue with direct stack allocation
+        patterns.push((
+            "avr_da_db_optimized".to_string(),
+            vec![0x2D, 0xB7, 0x3E, 0xB7, 0x20, 0xE0, 0x30, 0xE0],  // Direct stack setup without frame pointer
+            vec![0xFF, 0xFF, 0xFF, 0xFF, 0xF0, 0xF0, 0xF0, 0xF0],
+        ));
+        
+        // AVR DD series with compact stack frame setup
+        patterns.push((
+            "avr_dd_compact_frame".to_string(),
+            vec![0x1F, 0x92, 0x0F, 0x92, 0xCF, 0x93, 0xDF, 0x93],  // Compact push sequence (r1, r0, r28, r29)
+            vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF],
+        ));
+        
+        // AVR DA/DB/DD with hardware stack pointer checking enabled
+        patterns.push((
+            "avr_da_db_dd_hwstackcheck".to_string(),
+            vec![0xAF, 0x92, 0xBF, 0x92, 0x18, 0xBA],  // Stack check register setup
+            vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFA],
+        ));
+        
+        // AVR DA/DB/DD with higher code density optimization (-Os)
+        patterns.push((
+            "avr_da_db_dd_code_density".to_string(),
+            vec![0xEC, 0x01, 0x2E, 0xB7, 0x27, 0xB7],  // Code density optimized prologue
+            vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF],
+        ));
+        
+        // AVR DA/DB/DD with RAMPD/RAMPX/RAMPY/RAMPZ access
+        patterns.push((
+            "avr_da_db_dd_extended_memory".to_string(),
+            vec![0x9F, 0x92, 0x8F, 0x92, 0x7F, 0x92, 0x6F, 0x92],  // Extended memory register save
+            vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF],
+        ));
+        
+        // AVR DA/DB/DD optimized prologue for interrupt handlers
+        patterns.push((
+            "avr_da_db_dd_optimized_isr".to_string(),
+            vec![0x3F, 0x92, 0x0F, 0x92, 0x1F, 0x92],  // Status register + r0,r1 save
+            vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF],
+        ));
+        
         // IAR compiler common pattern
         patterns.push((
             "iar_prologue".to_string(),
