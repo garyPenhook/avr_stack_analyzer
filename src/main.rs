@@ -1,6 +1,6 @@
 // AVR Stack - Enhanced stack analyzer for AVR chips
 // Version 1.4
-// Original by Gary Scott (Dazed_N_Confused)
+// Author Gary Scott (Dazed_N_Confused)
 // Enhanced for comprehensive stack usage analysis
 // rustc 1.85.1 (4eb161250 2025-03-15)
 
